@@ -452,18 +452,23 @@ impl GpuRenderer {
         };
 
         let last_call = self.draw_calls.last();
+        // P0-1: `is_empty()` short-circuits, so `last_call` is only dereferenced
+        // when present. `is_none_or` makes that invariant explicit instead of
+        // relying on 22 separate `unwrap()` calls.
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
-            || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().panel_id != self.current_panel_id
-            || last_call.unwrap().material != material
-            || {
-                let last_material = last_call.unwrap().material;
-                matches!((material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || last_call.is_none_or(|c| {
+                c.scissor_rect != scissor
+                    || c.panel_id != self.current_panel_id
+                    || c.material != material
+                    || {
+                        let last_material = c.material;
+                        matches!((material, last_material),
+                            (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
+                             cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
+                            if a != d || b != e || c != f)
+                    }
+            });
 
         if needs_new_call {
             self.current_texture_id = texture_id;
@@ -674,19 +679,22 @@ impl GpuRenderer {
         // Transform (translation/scale/rotation) is per-instance data and should NOT
         // break the batch - multiple instances with different transforms can share a draw call.
         let last_call = self.draw_calls.last();
+        // P0-1: see the sibling batching check above for the invariant.
         let needs_new_call = self.draw_calls.is_empty()
-            || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().material != material
-            || last_call.unwrap().texture_id != self.current_texture_id
-            || last_call.unwrap().panel_id != self.current_panel_id
-            || {
-                // Check if glass/blur state changed (these require pipeline changes)
-                let last_material = last_call.unwrap().material;
-                matches!((material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || last_call.is_none_or(|c| {
+                c.scissor_rect != scissor
+                    || c.material != material
+                    || c.texture_id != self.current_texture_id
+                    || c.panel_id != self.current_panel_id
+                    || {
+                        // Check if glass/blur state changed (pipeline change)
+                        let last_material = c.material;
+                        matches!((material, last_material),
+                            (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
+                             cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
+                            if a != d || b != e || c != f)
+                    }
+            });
 
         if needs_new_call {
             self.current_texture_id = Some(0); // All textures are now in the binding array at Group 0
@@ -978,24 +986,29 @@ impl GpuRenderer {
         let (gbuffer_albedo, gbuffer_normal, gbuffer_motion, ssao_tex) =
             if let Some(window_id) = self.current_window {
                 let ctx = self.surfaces.get(&window_id).unwrap();
-                (ctx.gbuffer_albedo, ctx.gbuffer_normal, ctx.gbuffer_motion, ctx.ssao_tex)
+                (
+                    ctx.gbuffer_albedo,
+                    ctx.gbuffer_normal,
+                    ctx.gbuffer_motion,
+                    ctx.ssao_tex,
+                )
             } else {
                 let ctx = self.headless_context.as_ref().unwrap();
-                (ctx.gbuffer_albedo, ctx.gbuffer_normal, ctx.gbuffer_motion, ctx.ssao_tex)
+                (
+                    ctx.gbuffer_albedo,
+                    ctx.gbuffer_normal,
+                    ctx.gbuffer_motion,
+                    ctx.ssao_tex,
+                )
             };
-        self.registry.alias(
-            crate::kvasir::nodes::RES_GBUFFER_ALBEDO,
-            gbuffer_albedo,
-        );
-        self.registry.alias(
-            crate::kvasir::nodes::RES_GBUFFER_NORMAL,
-            gbuffer_normal,
-        );
-        self.registry.alias(
-            crate::kvasir::nodes::RES_GBUFFER_MOTION,
-            gbuffer_motion,
-        );
-        self.registry.alias(crate::kvasir::nodes::RES_SSAO_OUT, ssao_tex);
+        self.registry
+            .alias(crate::kvasir::nodes::RES_GBUFFER_ALBEDO, gbuffer_albedo);
+        self.registry
+            .alias(crate::kvasir::nodes::RES_GBUFFER_NORMAL, gbuffer_normal);
+        self.registry
+            .alias(crate::kvasir::nodes::RES_GBUFFER_MOTION, gbuffer_motion);
+        self.registry
+            .alias(crate::kvasir::nodes::RES_SSAO_OUT, ssao_tex);
 
         let scale = self.current_scale_factor();
         let scale_bits = scale.to_bits();
@@ -1084,10 +1097,13 @@ impl GpuRenderer {
                     frame_index: self.frame_counter,
                 },
             );
-            
+
             // Debug: log when graph is rebuilt
-            tracing::trace!("Building new render graph, has_volumetric={}", has_volumetric);
-            
+            tracing::trace!(
+                "Building new render graph, has_volumetric={}",
+                has_volumetric
+            );
+
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);
             let compiled_plan = match planner.compile() {
                 Ok(plan) => plan,
@@ -1167,7 +1183,11 @@ impl GpuRenderer {
                 }
             }
             if let Some(node) = cached.graph.node(node_key) {
-                tracing::trace!("Executing node: {} (allow_degradation={})", node.label(), allow_degradation);
+                tracing::trace!(
+                    "Executing node: {} (allow_degradation={})",
+                    node.label(),
+                    allow_degradation
+                );
                 // SAFETY: ctx.registry borrows registry mutably while ctx.renderer
                 // borrows the rest of self immutably. We split-field borrow
                 // via dedicated local bindings so the borrow checker does not
@@ -1619,7 +1639,9 @@ impl GpuRenderer {
             cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
             cvkg_compositor::Material::Opaque => cvkg_core::DrawMaterial::Opaque,
             cvkg_compositor::Material::Isolated => {
-                tracing::warn!("Isolated material reached convert_compositor_material (should be handled by PushOffscreen/PopOffscreen)");
+                tracing::warn!(
+                    "Isolated material reached convert_compositor_material (should be handled by PushOffscreen/PopOffscreen)"
+                );
                 cvkg_core::DrawMaterial::Opaque
             }
             cvkg_compositor::Material::ShaderEffect { effect_name, .. } => {
@@ -1682,18 +1704,21 @@ impl GpuRenderer {
         // CRITICAL FIX: Only break batch on material/scissor/texture state changes.
         // Transform (translation/scale/rotation) is per-instance data.
         let last_call = renderer.draw_calls.last();
+        // P0-1: see the sibling batching check above for the invariant.
         let needs_new_call = renderer.draw_calls.is_empty()
             || renderer.current_texture_id != texture_id
-            || last_call.unwrap().scissor_rect != renderer.clip_stack.last().copied()
-            || last_call.unwrap().panel_id != renderer.current_panel_id
-            || last_call.unwrap().material != material
-            || {
-                let last_material = last_call.unwrap().material;
-                matches!((material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || last_call.is_none_or(|c| {
+                c.scissor_rect != renderer.clip_stack.last().copied()
+                    || c.panel_id != renderer.current_panel_id
+                    || c.material != material
+                    || {
+                        let last_material = c.material;
+                        matches!((material, last_material),
+                            (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
+                             cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
+                            if a != d || b != e || c != f)
+                    }
+            });
 
         if needs_new_call {
             renderer.current_texture_id = texture_id;
@@ -2078,7 +2103,12 @@ impl GpuRenderer {
             model_row2: [row2.x, row2.y, row2.z, row2.w],
             // material_overrides: [metallic, roughness, reserved, opacity]
             // The third element is reserved for future use (e.g., AO or emissive).
-            material_overrides: [material.metallic, material.roughness, 0.0 /* reserved */, material.opacity],
+            material_overrides: [
+                material.metallic,
+                material.roughness,
+                0.0, /* reserved */
+                material.opacity,
+            ],
             uv_scale: material.uv_scale,
             uv_offset: material.uv_offset,
         });
@@ -2088,7 +2118,11 @@ impl GpuRenderer {
             let mut skinned_vertices = Vec::with_capacity(mesh.vertices.len());
             for i in 0..mesh.vertices.len() {
                 let joints = mesh.joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
-                let weights = mesh.joint_weights.get(i).copied().unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                let weights = mesh
+                    .joint_weights
+                    .get(i)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 0.0, 0.0]);
                 skinned_vertices.push(crate::vertex::SkinnedVertex {
                     position: mesh.vertices[i],
                     _pad0: 0.0,
@@ -2110,13 +2144,17 @@ impl GpuRenderer {
 
             let dst_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Skinned Mesh Destination Buffer"),
-                size: (mesh.vertices.len() * std::mem::size_of::<crate::vertex::SkinnedOutput>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
+                size: (mesh.vertices.len() * std::mem::size_of::<crate::vertex::SkinnedOutput>())
+                    as u64,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::VERTEX
+                    | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
 
             // Push this mesh's buffer pair for SkinningNode to dispatch
-            self.skinning_buffer_pairs.push((src_buffer, dst_buffer.clone()));
+            self.skinning_buffer_pairs
+                .push((src_buffer, dst_buffer.clone()));
 
             Some(dst_buffer)
         } else {
@@ -2224,7 +2262,12 @@ impl GpuRenderer {
             model_row2: [row2.x, row2.y, row2.z, row2.w],
             // material_overrides: [metallic, roughness, reserved, opacity]
             // The third element is reserved for future use (e.g., AO or emissive).
-            material_overrides: [material.metallic, material.roughness, 0.0 /* reserved */, material.opacity],
+            material_overrides: [
+                material.metallic,
+                material.roughness,
+                0.0, /* reserved */
+                material.opacity,
+            ],
             uv_scale: material.uv_scale,
             uv_offset: material.uv_offset,
         });
@@ -2233,7 +2276,11 @@ impl GpuRenderer {
             let mut skinned_vertices = Vec::with_capacity(mesh.vertices.len());
             for i in 0..mesh.vertices.len() {
                 let joints = mesh.joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
-                let weights = mesh.joint_weights.get(i).copied().unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                let weights = mesh
+                    .joint_weights
+                    .get(i)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 0.0, 0.0]);
                 skinned_vertices.push(crate::vertex::SkinnedVertex {
                     position: mesh.vertices[i],
                     _pad0: 0.0,
@@ -2255,12 +2302,16 @@ impl GpuRenderer {
 
             let dst_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Skinned Mesh Destination Buffer"),
-                size: (mesh.vertices.len() * std::mem::size_of::<crate::vertex::SkinnedOutput>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
+                size: (mesh.vertices.len() * std::mem::size_of::<crate::vertex::SkinnedOutput>())
+                    as u64,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::VERTEX
+                    | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
 
-            self.skinning_buffer_pairs.push((src_buffer, dst_buffer.clone()));
+            self.skinning_buffer_pairs
+                .push((src_buffer, dst_buffer.clone()));
 
             Some(dst_buffer)
         } else {

@@ -259,9 +259,16 @@ graph TD
 
 CVKG targets developers who need custom-drawn interfaces with GPU performance but do not want to build a rendering engine from scratch. It provides a declarative view system, retained scene graph, flexbox/grid layout, spring-physics animation, and SVG support -- all compiling to native GPU pipelines or WebGPU.
 
+## Shader and GPU backend support (P0-4)
+
+- **WGSL is the source of truth.** All shaders live in `cvkg-render-gpu/src/shaders/*.wgsl` and are included as Rust strings from `cvkg-render-gpu/src/lib.rs`. Runtime material functions are generated from `MaterialGraph` definitions in `cvkg-render-gpu/src/material.rs`.
+- **Composed programs are validated in CI.** The renderer assembles a shared preamble with a material body, effect modules and generated material code into one shader module per pipeline (`cvkg-render-gpu/src/shader_composition.rs`). Tests parse and validate every composed variant with naga for both the native and wasm shader sets. See [docs/quality/shader-validation.md](docs/quality/shader-validation.md).
+- **SPIR-V is out of scope.** There are no hand-authored `.spv`/`.spvasm` files and no in-repo SPIR-V generation or consumption pipeline. `naga`/`wgpu` are built with SPIR-V *capability* features enabled, but that is not a supported artifact path and is not covered by golden tests. Backend translation (Vulkan/Metal/DX12/WebGPU) is performed by wgpu/Naga at runtime; CVKG does not ship or audit backend IR.
+- **wasm caveat:** WebGL2/WebGPU on wasm32 uses separate single-texture shader variants because binding arrays are unavailable there. The wasm shaders are validated by naga on the host, but browser-level runtime verification is still outstanding (see [docs/platform/webkit-compatibility.md](docs/platform/webkit-compatibility.md)).
+
 ## Prerequisites
 
-- **Rust**: 1.85.0 or later (Edition 2024).
+- **Rust**: 1.95 or later (Edition 2024; `rust-version` in `Cargo.toml`).
 - **GPU**: Vulkan, Metal, or DX12 compatible hardware for native targets.
 - **Linux system deps**: `libfontconfig1-dev`, `pkg-config`, `libx11-dev`, `libwayland-dev`.
 - **WASM target**: `rustup target add wasm32-unknown-unknown`.
@@ -343,4 +350,4 @@ cargo run -p demos/berserker
 
 ## License
 
-Mozilla Public License 2.0 -- see [LICENSE](LICENSE).
+Eclipse Public License 2.0 -- see [LICENSE](LICENSE).

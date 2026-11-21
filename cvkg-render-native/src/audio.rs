@@ -9,12 +9,24 @@ use std::sync::Arc;
 /// Playback via rodio::play(&mixer, cursor).
 pub struct RodioAudioEngine {
     sink: rodio::MixerDeviceSink,
+    /// Thread that constructed the engine. Used to detect (and report) use
+    /// from another thread, which would violate the `Send`/`Sync` claim below.
+    created_on: std::thread::ThreadId,
 }
 
-// MixerDeviceSink is not Send+Sync on some platforms, but we only use it
-// from the main thread. The AudioEngine trait requires Send+Sync for use in
-// App struct fields, which is safe here because we never move it across threads.
+// SAFETY (P0-2): `MixerDeviceSink` is not `Send`/`Sync` on some platforms, but
+// the engine is constructed on the app's main thread, stored in `App`, and
+// only driven from that thread's event loop. There is no public API that moves
+// a `RodioAudioEngine` to another thread or shares a reference across threads;
+// the `Send + Sync` bound exists solely to satisfy the `AudioEngine` trait used
+// by `App` fields. `play_buffer` warns when it observes a foreign thread so
+// misuse is visible instead of silently causing UB. If audio ever needs to be
+// played from workers, wrap the sink in a thread-confined actor instead of
+// relying on these impls.
 unsafe impl Send for RodioAudioEngine {}
+// SAFETY (P0-2): as above — `&self` is only shared within the creating thread.
+// `Sync` is the stronger claim and is justified by the same confinement; the
+// runtime check in `play_buffer` detects violations in debug and release.
 unsafe impl Sync for RodioAudioEngine {}
 
 impl RodioAudioEngine {
@@ -23,7 +35,10 @@ impl RodioAudioEngine {
         match rodio::DeviceSinkBuilder::open_default_sink() {
             Ok(sink) => {
                 tracing::info!("[Native] Audio engine initialized (rodio)");
-                Some(Self { sink })
+                Some(Self {
+                    sink,
+                    created_on: std::thread::current().id(),
+                })
             }
             Err(e) => {
                 tracing::warn!("[Native] Audio init failed (no sound): {}", e);
@@ -48,6 +63,14 @@ impl cvkg_core::AudioEngine for RodioAudioEngine {
     }
 
     fn play_buffer(&self, data: &[u8], _volume: f32) {
+        // P0-2: detect violations of the thread-confinement invariant that the
+        // unsafe `Send`/`Sync` impls above rely on. Warn rather than panic so a
+        // late misuse degrades to missing audio, not a crash.
+        if std::thread::current().id() != self.created_on {
+            tracing::warn!(
+                "[Native] Audio engine used from a foreign thread; this violates its Send/Sync contract"
+            );
+        }
         use std::io::Cursor;
         let cursor = Cursor::new(data.to_vec());
         let mixer = self.sink.mixer();

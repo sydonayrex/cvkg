@@ -1,8 +1,9 @@
 //! Gallery application definition
 
 use super::{sidebar, canvas, state, spotlight, props_panel, docs_panel};
-use cvkg_core::{Rect, Renderer, Size, View};
+use cvkg_core::{Rect, Renderer, Size, ThemeContext, View};
 use std::sync::{Arc, Mutex};
+
 
 /// Main gallery application.
 #[derive(Clone)]
@@ -93,7 +94,37 @@ impl View for GalleryApp {
     fn body(self) -> Self::Body { unreachable!() }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        eprintln!("[CVKG App Render] rect: {:?}", rect);
+        // Apply gallery theme to the thread-local theme context so that all
+        // component helpers (theme::surface(), theme::text(), etc.) return
+        // the correct semantic colors for the user-selected theme.
+        // WHY here: the native renderer sets its own GPU-based theme context
+        // before each frame. The gallery overrides it at the start of render
+        // so all child components (sidebar, toolbar, canvas) see the right theme.
+        let gallery_theme = {
+            let state = self.state.lock().unwrap();
+            state.theme
+        };
+        let theme_ctx = match gallery_theme {
+            state::GalleryTheme::Light => ThemeContext::light(),
+            state::GalleryTheme::Dark => ThemeContext::dark(),
+            state::GalleryTheme::HighContrast => ThemeContext {
+                colors: cvkg_core::SemanticColors {
+                    background: cvkg_core::Color::new(0.0, 0.0, 0.0, 1.0),
+                    surface: cvkg_core::Color::new(0.1, 0.1, 0.12, 1.0),
+                    text: cvkg_core::Color::new(1.0, 1.0, 1.0, 1.0),
+                    text_dim: cvkg_core::Color::new(0.8, 0.8, 0.8, 1.0),
+                    primary: cvkg_core::Color::new(0.0, 0.6, 1.0, 1.0),
+                    secondary: cvkg_core::Color::new(1.0, 1.0, 0.0, 1.0),
+                    accent: cvkg_core::Color::new(1.0, 0.2, 0.4, 1.0),
+                    error: cvkg_core::Color::new(1.0, 0.2, 0.2, 1.0),
+                    warning: cvkg_core::Color::new(1.0, 0.8, 0.0, 1.0),
+                    success: cvkg_core::Color::new(0.0, 1.0, 0.4, 1.0),
+                },
+                glassmorphism_enabled: false,
+            },
+        };
+        cvkg_core::set_theme_context(theme_ctx);
+
         // Get sidebar width from state
         let sidebar_width = {
             let state = self.state.lock().unwrap();
@@ -159,29 +190,24 @@ impl View for GalleryApp {
             height: bottom_height,
         };
 
-        eprintln!("[CVKG App Render] sidebar_rect: {:?}", sidebar_rect);
-        eprintln!("[CVKG App Render] toolbar_rect: {:?}", toolbar_rect);
-        eprintln!("[CVKG App Render] canvas_rect: {:?}", canvas_rect);
-        eprintln!("[CVKG App Render] props_panel_rect: {:?}", props_panel_rect);
-        eprintln!("[CVKG App Render] docs_panel_rect: {:?}", docs_panel_rect);
 
-        // Render sidebar
-        renderer.fill_rect(sidebar_rect, [0.1, 0.1, 0.12, 1.0]); // Dark slate background for sidebar
+
+        // Render sidebar — dark navy panel on the left.
+        // WHY this color: visually distinct from the aurora red gradient to confirm the
+        // fill renders at the correct position. Chosen to contrast without jarring contrast.
+        renderer.fill_rect(sidebar_rect, [0.08, 0.08, 0.12, 1.0]);
         self.sidebar.render(renderer, sidebar_rect);
 
         // Render toolbar
         self.toolbar.render(renderer, toolbar_rect);
         
         // Render canvas
-        renderer.fill_rect(canvas_rect, [0.15, 0.15, 0.18, 1.0]); // Darker gray background for canvas
         self.canvas.render(renderer, canvas_rect);
         
         // Render props panel
-        renderer.fill_rect(props_panel_rect, [0.12, 0.12, 0.15, 1.0]); // Dark slate for props
         self.props_panel.render(renderer, props_panel_rect);
         
         // Render docs panel
-        renderer.fill_rect(docs_panel_rect, [0.08, 0.08, 0.1, 1.0]); // Even darker slate for docs
         self.docs_panel.render(renderer, docs_panel_rect);
         
         // Render spotlight overlay if open

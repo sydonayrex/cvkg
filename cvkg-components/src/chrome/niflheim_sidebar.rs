@@ -121,6 +121,9 @@ impl NiflheimSidebar {
         is_hovered: bool,
         depth: usize,
     ) {
+        let prev_material = renderer.current_material();
+        renderer.set_material(cvkg_core::DrawMaterial::TopUI);
+
         let bg = if is_selected {
             theme::active_color()
         } else if is_hovered {
@@ -147,7 +150,7 @@ impl NiflheimSidebar {
         }
 
         // Label
-        let text_color = theme::text();
+        let text_color = [1.0, 1.0, 1.0, 1.0]; // Force white text
         renderer.draw_text_raw(
             &item.label,
             rect.x + indent + 20.0,
@@ -179,6 +182,8 @@ impl NiflheimSidebar {
                 theme::text(),
             );
         }
+
+        renderer.set_material(prev_material);
     }
 }
 

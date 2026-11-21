@@ -12,6 +12,7 @@ use std::sync::Arc;
 // Re-export for test access
 pub use crate::subsystems::RendererConfig;
 
+pub(crate) mod capability;
 pub(crate) mod context_helpers;
 pub(crate) mod draw;
 pub(crate) mod init;
@@ -19,7 +20,6 @@ pub(crate) mod pipelines;
 pub(crate) mod svg;
 #[cfg(test)]
 pub(crate) mod tests;
-pub(crate) mod capability;
 pub(crate) use capability::GpuCapabilityTier;
 
 /// Material ID constants used in vertex `material_id` and DrawMaterial routing.
@@ -471,9 +471,20 @@ pub struct GpuRenderer {
     >,
 }
 
-#[cfg(target_arch = "wasm32")]
+// SAFETY (P0-2): on wasm32 without the `atomics` target feature there is a
+// single JS/WASM execution thread, so no wgpu/JS handle inside `GpuRenderer`
+// can be observed concurrently from another thread. `wgpu` is compiled with
+// `fragile-send-sync-non-atomic-wasm`, which makes its handles Send/Sync under
+// exactly this assumption. The impls are gated on `not(target_feature =
+// "atomics")` so that enabling shared-memory multithreading turns this unsafe
+// claim into a compile error instead of undefined behavior. `GpuRenderer` must
+// still never be transferred to a Web Worker.
+#[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
 unsafe impl Send for GpuRenderer {}
-#[cfg(target_arch = "wasm32")]
+// SAFETY (P0-2): as above — `&GpuRenderer` is only ever shared within the
+// single wasm thread. With atomics enabled this impl disappears, so a worker
+// that tries to share the renderer fails at compile time.
+#[cfg(all(target_arch = "wasm32", not(target_feature = "atomics")))]
 unsafe impl Sync for GpuRenderer {}
 
 /// Per-hologram instance data submitted during the frame.
@@ -1074,11 +1085,14 @@ impl GpuRenderer {
                     width,
                     height,
                     mip_level_count: 1,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
                 },
                 lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
             };
-            ctx.gbuffer_albedo = self.registry.allocate_image(&self.device, &gbuffer_albedo_desc);
+            ctx.gbuffer_albedo = self
+                .registry
+                .allocate_image(&self.device, &gbuffer_albedo_desc);
 
             let gbuffer_normal_desc = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("G-Buffer Normal Resize".into()),
@@ -1087,11 +1101,14 @@ impl GpuRenderer {
                     width,
                     height,
                     mip_level_count: 1,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
                 },
                 lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
             };
-            ctx.gbuffer_normal = self.registry.allocate_image(&self.device, &gbuffer_normal_desc);
+            ctx.gbuffer_normal = self
+                .registry
+                .allocate_image(&self.device, &gbuffer_normal_desc);
 
             let gbuffer_motion_desc = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("G-Buffer Motion Resize".into()),
@@ -1100,11 +1117,14 @@ impl GpuRenderer {
                     width,
                     height,
                     mip_level_count: 1,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
                 },
                 lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
             };
-            ctx.gbuffer_motion = self.registry.allocate_image(&self.device, &gbuffer_motion_desc);
+            ctx.gbuffer_motion = self
+                .registry
+                .allocate_image(&self.device, &gbuffer_motion_desc);
 
             let ssao_desc = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("SSAO Resize".into()),
@@ -1113,7 +1133,8 @@ impl GpuRenderer {
                     width,
                     height,
                     mip_level_count: 1,
-                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
                 },
                 lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
             };
@@ -1466,7 +1487,10 @@ impl GpuRenderer {
             })
             .await
             .map_err(|e| {
-                tracing::error!("[GPU] Failed to create headless device with tier {:?}: {e}", tier);
+                tracing::error!(
+                    "[GPU] Failed to create headless device with tier {:?}: {e}",
+                    tier
+                );
                 e
             })
             .expect("Failed to create Surtr device even after capability detection");

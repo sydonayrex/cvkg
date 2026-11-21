@@ -139,26 +139,28 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 &self.view,
             );
 
-            let winit_id = match self
-                .window_manager
-                .core_to_winit
-                .get(&handle.id)
-                .copied()
-            {
+            let winit_id = match self.window_manager.core_to_winit.get(&handle.id).copied() {
                 Some(id) => id,
                 None => {
-                    tracing::error!("[Native] winit_id not found for window handle: window may have been destroyed");
+                    tracing::error!(
+                        "[Native] winit_id not found for window handle: window may have been destroyed"
+                    );
                     // Return instead of exit(1) to allow RAII cleanup
                     return;
                 }
             };
-            let window = self
-                .window_manager
-                .windows
-                .get(&winit_id)
-                .unwrap()
-                .window
-                .clone();
+            // P0-1: mirror the `winit_id` branch above — a destroyed window
+            // must return cleanly instead of panicking during startup.
+            let window = match self.window_manager.windows.get(&winit_id) {
+                Some(entry) => entry.window.clone(),
+                None => {
+                    tracing::error!(
+                        "[Native] window entry missing for winit_id {:?}; aborting window setup",
+                        winit_id
+                    );
+                    return;
+                }
+            };
 
             let mut gpu = pollster::block_on(cvkg_render_gpu::GpuRenderer::forge(window.clone()));
 
@@ -463,8 +465,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     {
                         let raw: *mut cvkg_render_gpu::GpuRenderer = &mut *gpu;
-                        // SAFETY: `gpu` MutexGuard outlives this guard (scope ends after render)
-                        let _guard = unsafe { GpuFramePtrGuard::set(raw) };
+                        // SAFETY: the `gpu` MutexGuard (from `gpu_arc`) outlives
+                        // this guard — its scope ends after `view.render`.
+                        let _guard = unsafe { GpuFramePtrGuard::set(&gpu_arc, raw) };
                         let render_start = std::time::Instant::now();
                         self.view.render(&mut renderer, content_rect);
                         let render_time = render_start.elapsed().as_secs_f32() * 1000.0;
@@ -758,7 +761,10 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             "[Native] Dispatching PointerClick to VDOM (target={:?})",
                                             target
                                         );
-                                        vdom.dispatch_event_to_target(target, pointer_click.clone());
+                                        vdom.dispatch_event_to_target(
+                                            target,
+                                            pointer_click.clone(),
+                                        );
                                     } else {
                                         tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
@@ -921,7 +927,10 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             "[Native] Dispatching PointerClick to VDOM (target={:?})",
                                             target
                                         );
-                                        vdom.dispatch_event_to_target(target, pointer_click.clone());
+                                        vdom.dispatch_event_to_target(
+                                            target,
+                                            pointer_click.clone(),
+                                        );
                                     } else {
                                         tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"

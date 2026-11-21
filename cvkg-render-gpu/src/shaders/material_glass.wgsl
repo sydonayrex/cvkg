@@ -9,7 +9,7 @@
 /// n1 = 1.0 (air), n2 = per-instance IOR from uniforms.
 /// Returns the UV offset for the refracted sample direction.
 fn snell_refraction(normal: vec2<f32>, incident: vec2<f32>, ior: f32) -> vec2<f32> {
-    let n_ratio = 1.0 / ior;
+    let n_ratio = safe_div_f32(1.0, ior, 1.0);
     let cos_i = -dot(normal, incident);
     let sin2_t = n_ratio * n_ratio * (1.0 - cos_i * cos_i);
 
@@ -18,7 +18,11 @@ fn snell_refraction(normal: vec2<f32>, incident: vec2<f32>, ior: f32) -> vec2<f3
         return reflect(incident, normal);
     }
 
-    let cos_t = sqrt(1.0 - sin2_t);
+    // P1-2: clamp the radicand so a non-finite sin2_t cannot poison sqrt.
+    if (!is_finite_f32(sin2_t)) {
+        return incident;
+    }
+    let cos_t = sqrt(clamp(1.0 - sin2_t, 0.0, 1.0));
     return n_ratio * incident + (n_ratio * cos_i - cos_t) * normal;
 }
 
@@ -29,7 +33,7 @@ fn ggx_ndf(n_dot_h: f32, roughness: f32) -> f32 {
     let a = roughness * roughness;
     let a2 = a * a;
     let denom = n_dot_h * n_dot_h * (a2 - 1.0) + 1.0;
-    return a2 / (3.14159265 * denom * denom);
+    return safe_div_f32(a2, 3.14159265 * denom * denom, 0.0);
 }
 
 /// Compute specular highlight for liquid glass surface.
@@ -39,7 +43,7 @@ fn ggx_ndf(n_dot_h: f32, roughness: f32) -> f32 {
 /// roughness: surface roughness (0 = mirror, 1 = diffuse)
 /// intensity: specular intensity multiplier
 fn ggx_specular(light_dir: vec2<f32>, view_dir: vec2<f32>, normal: vec2<f32>, roughness: f32, intensity: f32) -> f32 {
-    let half_vec = normalize(light_dir + view_dir);
+    let half_vec = safe_normalize_vec2(light_dir + view_dir, normal);
     let n_dot_h = max(dot(normal, half_vec), 0.0);
     let n_dot_l = max(dot(normal, light_dir), 0.0);
     let n_dot_v = max(dot(normal, view_dir), 0.0);
@@ -53,7 +57,7 @@ fn ggx_specular(light_dir: vec2<f32>, view_dir: vec2<f32>, normal: vec2<f32>, ro
 
     // Geometry function (Smith's method)
     let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
-    let g = n_dot_v / (n_dot_v * (1.0 - k) + k);
+    let g = safe_div_f32(n_dot_v, n_dot_v * (1.0 - k) + k, 0.0);
     let g2 = g * g;
 
     let spec = (d * fresnel * g2) / (4.0 * n_dot_l * n_dot_v + 0.001);
@@ -232,7 +236,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (dist_to_mouse < hover_radius) {
         let hover_factor = 1.0 - (dist_to_mouse / hover_radius);
         let hover_pulse = smoothstep(0.0, 1.0, hover_factor);
-        let hover_dir = normalize(frag_logical_pos - scene.mouse + vec2<f32>(1e-5, 1e-5));
+        let hover_dir = safe_normalize_vec2(frag_logical_pos - scene.mouse, vec2<f32>(0.0, -1.0));
         let mouse_speed = length(scene.mouse_velocity);
         let hover_displacement = hover_dir * hover_pulse * (0.015 + mouse_speed * 0.003);
         distortion += hover_displacement;
@@ -312,7 +316,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let to_fireball = scene.fireball_pos - frag_world;
     let fireball_dist = length(to_fireball);
     // Normalize; default to top-left if fireball is at origin (uninitialized)
-    let light_dir = select(normalize(vec2<f32>(-0.6, -0.8)), normalize(to_fireball + vec2<f32>(1e-5, 1e-5)), fireball_dist > 1.0);
+    let light_dir = select(
+            safe_normalize_vec2(vec2<f32>(-0.6, -0.8), vec2<f32>(0.0, -1.0)),
+            safe_normalize_vec2(to_fireball, vec2<f32>(0.0, -1.0)),
+            fireball_dist > 1.0
+        );
     // Specular intensity falls off with distance (closer fireball = brighter spec)
     let fireball_intensity = 2.5 * clamp(300.0 / (fireball_dist + 100.0), 0.0, 1.0);
     let spec = ggx_specular(light_dir, view_dir, lens_normal, 0.15, fireball_intensity);

@@ -1,6 +1,88 @@
 use crate::engine::{FilterEngine, FilterUniforms};
 use crate::types::{FilterError, FilterResult};
 
+/// Structural equality for `usvg` transfer functions.
+///
+/// `usvg::filter::TransferFunction` derives only `Clone`/`Debug`, so there is no
+/// `PartialEq` to reuse. Numeric payloads are compared by their IEEE-754 bit
+/// patterns (`to_bits`) rather than with `==`: this keeps `-0.0` distinct from
+/// `+0.0` and makes a NaN payload compare equal to itself. An epsilon-based
+/// float comparison would be wrong here — two functions that differ slightly
+/// must not be mistaken for "the same function" and silently rendered with the
+/// R channel's parameters.
+fn transfer_functions_equal(
+    a: &usvg::filter::TransferFunction,
+    b: &usvg::filter::TransferFunction,
+) -> bool {
+    use usvg::filter::TransferFunction as Tf;
+    match (a, b) {
+        (Tf::Identity, Tf::Identity) => true,
+        (Tf::Table(xs), Tf::Table(ys)) | (Tf::Discrete(xs), Tf::Discrete(ys)) => {
+            xs.len() == ys.len()
+                && xs
+                    .iter()
+                    .zip(ys.iter())
+                    .all(|(x, y)| x.to_bits() == y.to_bits())
+        }
+        (
+            Tf::Linear {
+                slope: s1,
+                intercept: i1,
+            },
+            Tf::Linear {
+                slope: s2,
+                intercept: i2,
+            },
+        ) => s1.to_bits() == s2.to_bits() && i1.to_bits() == i2.to_bits(),
+        (
+            Tf::Gamma {
+                amplitude: a1,
+                exponent: e1,
+                offset: o1,
+            },
+            Tf::Gamma {
+                amplitude: a2,
+                exponent: e2,
+                offset: o2,
+            },
+        ) => {
+            a1.to_bits() == a2.to_bits()
+                && e1.to_bits() == e2.to_bits()
+                && o1.to_bits() == o2.to_bits()
+        }
+        _ => false,
+    }
+}
+
+/// Reject `feComponentTransfer` filters whose channels use different transfer
+/// functions.
+///
+/// The WGSL `component_transfer` shader has a single `sub_mode` and applies one
+/// function to R, G, B and A alike; it has no per-channel dispatch. Rendering a
+/// filter where `func_g`/`func_b`/`func_a` differ from `func_r` with that shader
+/// would silently produce a wrong image, so we fail explicitly instead. Filters
+/// whose four functions are equal remain fully supported and use the existing
+/// single-function path.
+fn ensure_uniform_transfer_function(
+    r: &usvg::filter::TransferFunction,
+    g: &usvg::filter::TransferFunction,
+    b: &usvg::filter::TransferFunction,
+    a: &usvg::filter::TransferFunction,
+) -> Result<(), FilterError> {
+    if transfer_functions_equal(r, g)
+        && transfer_functions_equal(r, b)
+        && transfer_functions_equal(r, a)
+    {
+        Ok(())
+    } else {
+        Err(FilterError::Unsupported(
+            "feComponentTransfer: func_g/func_b/func_a must match func_r; \
+             per-channel transfer functions are not supported"
+                .to_string(),
+        ))
+    }
+}
+
 impl FilterEngine {
     pub(crate) fn evaluate_primitive(
         &mut self,
@@ -548,12 +630,16 @@ impl FilterEngine {
         h: u32,
         ct: &usvg::filter::ComponentTransfer,
     ) -> Result<FilterResult, FilterError> {
+        // The shader applies one function to every channel. Fail loudly when the
+        // channels disagree rather than rendering G/B/A with the R function.
+        // See `ensure_uniform_transfer_function` for the full rationale.
+        ensure_uniform_transfer_function(ct.func_r(), ct.func_g(), ct.func_b(), ct.func_a())?;
+
         let output_view = self.get_temp_view(w, h)?;
         let input_size = (w as f32, h as f32);
 
-        // Process all four channels (R, G, B, A) with their respective transfer functions.
-        // For now, we use the R channel function for all channels as a simplification.
-        // A full implementation would pack all four functions into the uniform buffer.
+        // All four channels share one function (guaranteed above), so the R
+        // descriptor is representative and is applied to every channel.
         let func = ct.func_r();
         let sub_mode = match func {
             usvg::filter::TransferFunction::Identity => 0u32,
@@ -562,12 +648,6 @@ impl FilterEngine {
             usvg::filter::TransferFunction::Linear { .. } => 3u32,
             usvg::filter::TransferFunction::Gamma { .. } => 4u32,
         };
-
-        // TODO: Pack func_r, func_g, func_b, func_a into param0..param3
-        // and dispatch per-channel in the shader. Currently only R channel is applied.
-        log::debug!(
-            "apply_component_transfer: using R channel function for all channels (full per-channel support TODO)"
-        );
 
         let mut params = FilterUniforms::default();
         params.region = [0.0, 0.0, w as f32, h as f32];
@@ -1085,5 +1165,161 @@ impl FilterEngine {
             output_view: std::sync::Arc::new(input.clone()),
             region: (0, 0, w, h),
         })
+    }
+}
+
+#[cfg(test)]
+mod component_transfer_tests {
+    use super::*;
+    use usvg::filter::TransferFunction as Tf;
+
+    // ── Supported: all four channels share one function ──────────────────
+
+    #[test]
+    fn all_identity_channels_are_supported() {
+        let result = ensure_uniform_transfer_function(&Tf::Identity, &Tf::Identity, &Tf::Identity, &Tf::Identity);
+        assert!(result.is_ok(), "got {result:?}");
+    }
+
+    #[test]
+    fn all_linear_channels_with_equal_params_are_supported() {
+        let f = Tf::Linear {
+            slope: 2.0,
+            intercept: 0.5,
+        };
+        // Distinct allocations with equal payloads must still count as uniform.
+        let g = Tf::Linear {
+            slope: 2.0,
+            intercept: 0.5,
+        };
+        let result = ensure_uniform_transfer_function(&f, &g, &f.clone(), &f.clone());
+        assert!(result.is_ok(), "got {result:?}");
+    }
+
+    #[test]
+    fn all_gamma_channels_with_equal_params_are_supported() {
+        let f = Tf::Gamma {
+            amplitude: 1.0,
+            exponent: 2.2,
+            offset: 0.1,
+        };
+        let result = ensure_uniform_transfer_function(&f, &f.clone(), &f.clone(), &f.clone());
+        assert!(result.is_ok(), "got {result:?}");
+    }
+
+    #[test]
+    fn all_table_channels_with_equal_data_are_supported() {
+        let f = Tf::Table(vec![0.0, 0.5, 1.0]);
+        let g = Tf::Table(vec![0.0, 0.5, 1.0]);
+        let result = ensure_uniform_transfer_function(&f, &g, &f.clone(), &f.clone());
+        assert!(result.is_ok(), "got {result:?}");
+    }
+
+    // ── Unsupported: any channel differs from R ──────────────────────────
+
+    #[test]
+    fn differing_g_channel_is_rejected() {
+        let r = Tf::Identity;
+        let result = ensure_uniform_transfer_function(
+            &r,
+            &Tf::Linear {
+                slope: 1.0,
+                intercept: 0.0,
+            },
+            &r,
+            &r,
+        );
+        assert!(
+            matches!(result, Err(FilterError::Unsupported(_))),
+            "expected Unsupported, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn differing_b_channel_is_rejected() {
+        let r = Tf::Gamma {
+            amplitude: 1.0,
+            exponent: 2.0,
+            offset: 0.0,
+        };
+        let result = ensure_uniform_transfer_function(&r, &r.clone(), &Tf::Identity, &r.clone());
+        assert!(
+            matches!(result, Err(FilterError::Unsupported(_))),
+            "expected Unsupported, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn differing_a_channel_is_rejected() {
+        let r = Tf::Linear {
+            slope: 1.0,
+            intercept: 0.0,
+        };
+        let result = ensure_uniform_transfer_function(&r, &r.clone(), &r.clone(), &Tf::Identity);
+        assert!(
+            matches!(result, Err(FilterError::Unsupported(_))),
+            "expected Unsupported, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn different_variants_are_rejected() {
+        let result = ensure_uniform_transfer_function(
+            &Tf::Identity,
+            &Tf::Discrete(vec![0.0, 1.0]),
+            &Tf::Identity,
+            &Tf::Identity,
+        );
+        assert!(
+            matches!(result, Err(FilterError::Unsupported(_))),
+            "expected Unsupported, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn equal_variant_with_different_payload_is_rejected() {
+        let r = Tf::Gamma {
+            amplitude: 1.0,
+            exponent: 2.0,
+            offset: 0.0,
+        };
+        let g = Tf::Gamma {
+            amplitude: 1.0,
+            exponent: 2.2,
+            offset: 0.0,
+        };
+        let result = ensure_uniform_transfer_function(&r, &g, &r.clone(), &r.clone());
+        assert!(
+            matches!(result, Err(FilterError::Unsupported(_))),
+            "expected Unsupported, got {result:?}"
+        );
+    }
+
+    // ── Equality helper: bit-exact, variant-aware ────────────────────────
+
+    #[test]
+    fn equality_helper_handles_all_variants() {
+        assert!(transfer_functions_equal(&Tf::Identity, &Tf::Identity));
+        assert!(transfer_functions_equal(
+            &Tf::Table(vec![0.0, 1.0]),
+            &Tf::Table(vec![0.0, 1.0])
+        ));
+        assert!(transfer_functions_equal(
+            &Tf::Discrete(vec![0.0, 1.0]),
+            &Tf::Discrete(vec![0.0, 1.0])
+        ));
+        assert!(!transfer_functions_equal(
+            &Tf::Table(vec![0.0, 1.0]),
+            &Tf::Table(vec![0.0, 0.9])
+        ));
+        assert!(!transfer_functions_equal(
+            &Tf::Table(vec![0.0, 1.0]),
+            &Tf::Discrete(vec![0.0, 1.0])
+        ));
+        // Length mismatch must not be treated as equal.
+        assert!(!transfer_functions_equal(
+            &Tf::Table(vec![0.0, 1.0]),
+            &Tf::Table(vec![0.0, 1.0, 1.0])
+        ));
     }
 }

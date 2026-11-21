@@ -28,9 +28,9 @@
 
 ## Trigger events
 
-- `push` to `main` and `develop` branches
-- `pull_request` targeting `main` and `develop`
-- `workflow_dispatch` (manual trigger)
+- `workflow_dispatch` only — CI runs are launched manually from the Actions tab.
+  Push and pull-request triggers were intentionally disabled at the user's
+  request; run the workflow explicitly when you want a gate result.
 
 ## Concurrency
 

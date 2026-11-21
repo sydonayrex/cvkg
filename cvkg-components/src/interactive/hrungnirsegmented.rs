@@ -59,36 +59,49 @@ impl View for HrungnirSegmented {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // WHY local coordinates: push_vnode(rect) shifts the renderer translation by
+        // (rect.x, rect.y). The GPU draw calls then ADD renderer_translation to every
+        // vertex position. Using absolute rect.x/rect.y here would create a double-offset
+        // (elements rendered at 2× intended position). All coords below are LOCAL
+        // (origin = 0, 0 within the vnode boundary) so the final screen position is:
+        //   vertex_local + renderer_translation = vertex_local + (rect.x, rect.y) ✓
+        // CONTRACT: every draw call inside this block must use local coords.
+        //           pop_vnode() MUST be called at the end to release the translation.
         renderer.push_vnode(rect, "HrungnirSegmented");
         renderer.register_a11y("radiogroup", "Segmented control");
 
-        // Glass platter background
+        // Local dimensions — origin is (0, 0) inside the vnode.
+        let w = rect.width;
+        let h = rect.height;
+
+        // Glass platter background using local rect
         let radius = match self.style {
-            SegmentedStyle::Capsule => rect.height / 2.0,
+            SegmentedStyle::Capsule => h / 2.0,
             _ => 8.0,
         };
-        renderer.fill_rounded_rect(rect, radius, theme::surface_elevated());
+        let local_rect = cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h };
+        renderer.fill_rounded_rect(local_rect, radius, theme::surface_elevated());
 
-        // Sliding pill indicator (white tint at low opacity)
+        // Sliding pill indicator — x is local (pill_x is already relative to platter origin)
         let pill_rect = cvkg_core::Rect {
-            x: rect.x + self.pill_x,
-            y: rect.y + 2.0,
+            x: self.pill_x,
+            y: 2.0,
             width: self.pill_width,
-            height: rect.height - 4.0,
+            height: h - 4.0,
         };
         renderer.fill_rounded_rect(pill_rect, 6.0, [1.0, 1.0, 1.0, 0.15]);
 
-        // Segment labels - register click handlers
-        let item_width = rect.width / self.segments.len().max(1) as f32;
+        // Segment labels — all positions are local
+        let item_width = w / self.segments.len().max(1) as f32;
         for (i, label) in self.segments.iter().enumerate() {
-            let x = rect.x + i as f32 * item_width + item_width / 2.0;
-            let w = renderer.measure_text(label, 12.0).0;
+            let lx = i as f32 * item_width + item_width / 2.0;
+            let label_w = renderer.measure_text(label, 12.0).0;
             let color = if i == self.selected {
                 [1.0, 1.0, 1.0, 1.0]
             } else {
                 [0.7, 0.7, 0.75, 1.0]
             };
-            renderer.draw_text_raw(label, x - w / 2.0, rect.y + 8.0, 12.0, color);
+            renderer.draw_text_raw(label, lx - label_w / 2.0, 8.0, 12.0, color);
 
             // Register click handler for this segment
             if let Some(ref callback) = self.on_select {
@@ -102,6 +115,10 @@ impl View for HrungnirSegmented {
                 );
             }
         }
+
+        // MUST match every push_vnode — without this the translation stack leaks,
+        // causing all subsequent components to render off-screen.
+        renderer.pop_vnode();
     }
 }
 

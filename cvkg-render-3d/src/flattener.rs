@@ -8,9 +8,9 @@ use cvkg_core::mesh::Mesh;
 #[cfg(any(feature = "gltf", feature = "scene"))]
 use cvkg_spatial::frustum::Frustum;
 use glam::Mat4;
-use glam::Vec3;
 #[cfg(feature = "scene")]
 use glam::Quat;
+use glam::Vec3;
 
 /// A mesh instance with absolute world-space transform and precomputed AABB.
 ///
@@ -66,11 +66,7 @@ impl SceneFlattener {
     /// If `frustum` is provided, only instances whose AABB intersects the
     /// frustum are included in the output.
     #[cfg(feature = "gltf")]
-    pub fn flatten_gltf(
-        &self,
-        scene: &cvkg_gltf::Scene3D,
-        frustum: Option<&Frustum>,
-    ) -> FlatScene {
+    pub fn flatten_gltf(&self, scene: &cvkg_gltf::Scene3D, frustum: Option<&Frustum>) -> FlatScene {
         let mut instances = Vec::new();
 
         // Build absolute transforms for all nodes.
@@ -274,18 +270,17 @@ impl Default for SceneFlattener {
     }
 }
 
-#[cfg(test)]
+// P2-5: these tests exercise `flatten_gltf`, which only exists with the
+// optional `gltf` feature (along with the `cvkg_gltf` dependency). Without
+// gating, `cargo test --workspace` with default features fails to compile.
+#[cfg(all(test, feature = "gltf"))]
 mod tests {
     use super::*;
     use glam::Quat;
 
     fn sample_mesh() -> Mesh {
         Mesh {
-            vertices: vec![
-                [0.0, 0.0, 0.0],
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-            ],
+            vertices: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             normals: vec![[0.0, 0.0, 1.0]; 3],
             indices: vec![0, 1, 2],
             tex_coords: vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]],

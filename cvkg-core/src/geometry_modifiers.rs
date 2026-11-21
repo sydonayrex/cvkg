@@ -108,6 +108,18 @@ impl FrameModifier {
         self.alignment = alignment;
         self
     }
+
+    /// Clamp a layout dimension to the configured bounds (P1-1).
+    ///
+    /// `f32::clamp` panics when `min > max` and propagates NaN, both of which
+    /// are reachable through the public builder setters. `clamp_finite`
+    /// instead falls back to `0.0` for reversed/non-finite bounds, so a bad
+    /// constraint degrades to a zero-size frame rather than crashing layout.
+    fn bounded(&self, value: f32, min: Option<f32>, max: Option<f32>) -> f32 {
+        let lo = numeric::finite_or(min.unwrap_or(0.0), 0.0).max(0.0);
+        let hi = numeric::finite_or(max.unwrap_or(f32::MAX), f32::MAX);
+        numeric::clamp_finite(value, lo, hi, 0.0)
+    }
 }
 
 impl ViewModifier for FrameModifier {
@@ -118,25 +130,21 @@ impl ViewModifier for FrameModifier {
 
     /// Transforms the layout size proposal offered to the child to comply with frame constraints.
     fn transform_proposal(&self, proposal: SizeProposal) -> SizeProposal {
+        // P1-1: explicit sizes only need a finite check; min/max paths go
+        // through `bounded`, which also rejects reversed bounds.
         let w = if let Some(width) = self.width {
-            Some(width)
+            Some(numeric::finite_or(width, 0.0))
         } else {
-            proposal.width.map(|pw| {
-                pw.clamp(
-                    self.min_width.unwrap_or(0.0),
-                    self.max_width.unwrap_or(f32::INFINITY),
-                )
-            })
+            proposal
+                .width
+                .map(|pw| self.bounded(pw, self.min_width, self.max_width))
         };
         let h = if let Some(height) = self.height {
-            Some(height)
+            Some(numeric::finite_or(height, 0.0))
         } else {
-            proposal.height.map(|ph| {
-                ph.clamp(
-                    self.min_height.unwrap_or(0.0),
-                    self.max_height.unwrap_or(f32::INFINITY),
-                )
-            })
+            proposal
+                .height
+                .map(|ph| self.bounded(ph, self.min_height, self.max_height))
         };
         SizeProposal {
             width: w,
@@ -147,20 +155,14 @@ impl ViewModifier for FrameModifier {
     /// Constraints and transforms the child's resulting size to fit the frame's bounds.
     fn transform_size(&self, child_size: Size) -> Size {
         let w = if let Some(width) = self.width {
-            width
+            numeric::finite_or(width, 0.0)
         } else {
-            child_size.width.clamp(
-                self.min_width.unwrap_or(0.0),
-                self.max_width.unwrap_or(f32::INFINITY),
-            )
+            self.bounded(child_size.width, self.min_width, self.max_width)
         };
         let h = if let Some(height) = self.height {
-            height
+            numeric::finite_or(height, 0.0)
         } else {
-            child_size.height.clamp(
-                self.min_height.unwrap_or(0.0),
-                self.max_height.unwrap_or(f32::INFINITY),
-            )
+            self.bounded(child_size.height, self.min_height, self.max_height)
         };
         Size {
             width: w,
@@ -504,6 +506,54 @@ impl ViewModifier for PositionModifier {
             width: rect.width,
             height: rect.height,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // P1-1 regression: the public setters accept arbitrary floats. A reversed
+    // range used to make `f32::clamp` panic; a NaN bound used to propagate.
+    #[test]
+    fn reversed_dimension_bounds_do_not_panic() {
+        let modifier = FrameModifier::new()
+            .min_width(100.0)
+            .max_width(10.0)
+            .min_height(100.0)
+            .max_height(10.0);
+        let size = modifier.transform_size(Size::new(50.0, 50.0));
+        assert!(size.width.is_finite() && size.height.is_finite());
+        assert_eq!((size.width, size.height), (0.0, 0.0));
+    }
+
+    #[test]
+    fn non_finite_dimension_bounds_do_not_panic() {
+        let modifier = FrameModifier::new()
+            .min_width(f32::NAN)
+            .max_width(f32::INFINITY)
+            .min_height(f32::NEG_INFINITY)
+            .max_height(f32::NAN);
+        let size = modifier.transform_size(Size::new(50.0, f32::NAN));
+        assert!(size.width.is_finite() && size.height.is_finite());
+    }
+
+    #[test]
+    fn valid_dimension_bounds_still_clamp() {
+        let modifier = FrameModifier::new()
+            .min_width(20.0)
+            .max_width(80.0)
+            .min_height(20.0)
+            .max_height(80.0);
+        let size = modifier.transform_size(Size::new(200.0, 5.0));
+        assert_eq!((size.width, size.height), (80.0, 20.0));
+    }
+
+    #[test]
+    fn non_finite_explicit_size_is_sanitized() {
+        let modifier = FrameModifier::new().size(f32::NAN, f32::INFINITY);
+        let size = modifier.transform_size(Size::new(10.0, 10.0));
+        assert_eq!((size.width, size.height), (0.0, 0.0));
     }
 }
 

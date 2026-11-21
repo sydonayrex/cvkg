@@ -20,10 +20,11 @@ cvkg-themes.workspace = true
 cvkg-layout.workspace = true
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
 console_error_panic_hook = "0.1"
 log = "0.4"
 console_log = "1.0"
-web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "Performance"] }
+web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "Performance", "Document", "Element", "HtmlElement", "Node", "HtmlTextAreaElement", "EventTarget", "Event", "KeyboardEvent", "CompositionEvent", "Navigator", "Clipboard"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 glam = "0.33"

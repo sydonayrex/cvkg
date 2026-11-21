@@ -37,6 +37,8 @@ use std::str::FromStr;
 
 pub mod error_types;
 pub mod future_views;
+// P1-1: shared floating-point policy used by animation, layout and color paths.
+pub mod numeric;
 pub mod security;
 
 pub use error_types::CvkgError;

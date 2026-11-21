@@ -1020,11 +1020,12 @@ pub mod builtins {
     }
 }
 
-pub fn generate_builtins_wgsl() -> String {
-    let mut out = String::new();
-    out.push_str("// ── Auto-generated material functions (Runtime) ──\n\n");
-
-    let builtins = vec![
+/// The builtin material graphs appended to every composed WGSL program.
+///
+/// Each entry is `(dispatch id, stable name, graph)`. IDs are part of the
+/// shader ABI and must stay stable.
+fn builtin_material_graphs() -> Vec<(u32, &'static str, MaterialGraph)> {
+    vec![
         (0, "solid", builtins::solid()),
         (1, "neon_line", builtins::neon_line()),
         (2, "textured", builtins::textured(0)),
@@ -1053,7 +1054,54 @@ pub fn generate_builtins_wgsl() -> String {
         (19, "dashed", builtins::dashed_stroke()),
         (20, "nine_slice", builtins::nine_slice(0)),
         (21, "raymarch_cube", builtins::raymarch_cube()),
-    ];
+    ]
+}
+
+/// Rewrite `t_diffuse[<constant>]` to `t_diffuse` for the wasm shader set.
+///
+/// On wasm32/WebGL2 `t_diffuse` is a single texture, not a 32-element binding
+/// array, so indexed sampling in generated material functions is invalid WGSL.
+/// Only literal integer indices are rewritten; a dynamic index is left alone
+/// so validation reports it rather than silently changing behavior.
+fn use_single_texture(wgsl: &str) -> String {
+    const NEEDLE: &str = "t_diffuse[";
+    let mut out = String::with_capacity(wgsl.len());
+    let mut rest = wgsl;
+    while let Some(start) = rest.find(NEEDLE) {
+        out.push_str(&rest[..start]);
+        let after_open = &rest[start + NEEDLE.len()..];
+        match after_open.find(']') {
+            Some(end)
+                if after_open[..end]
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == 'u') =>
+            {
+                out.push_str("t_diffuse");
+                rest = &after_open[end + 1..];
+            }
+            _ => {
+                out.push_str(NEEDLE);
+                rest = after_open;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Shared builder for all generator variants.
+///
+/// `on_error` receives every builtin whose graph fails to compile. Only
+/// successfully compiled builtins are emitted into the dispatch switch, which
+/// keeps the generated WGSL internally consistent even in lossy mode.
+///
+/// `single_texture` selects the wasm32 sampling form (see [`use_single_texture`]).
+fn build_builtins_wgsl(
+    single_texture: bool,
+    on_error: &mut dyn FnMut(u32, &str, &MaterialError),
+) -> String {
+    let mut out = String::new();
+    out.push_str("// ── Auto-generated material functions (Runtime) ──\n\n");
 
     let mut dispatch = String::new();
     dispatch.push_str(
@@ -1061,29 +1109,102 @@ pub fn generate_builtins_wgsl() -> String {
     );
     dispatch.push_str("    switch material_id {\n");
 
-    for (id, name, graph) in builtins {
-        let compiled = MaterialCompiler::compile(&graph).unwrap();
-        let fn_name = format!("material_{}_{}", id, name);
-        let fn_code = compiled.wgsl_fn.replace("material_entry", &fn_name);
-        out.push_str(&fn_code);
-        out.push_str("\n\n");
-
-        dispatch.push_str(&format!(
-            "        case {}u: {{ return {}(in, col); }}\n",
-            id, fn_name
-        ));
+    for (id, name, graph) in builtin_material_graphs() {
+        // P0-1: a malformed builtin graph must not panic renderer startup.
+        match MaterialCompiler::compile(&graph) {
+            Ok(compiled) => {
+                let fn_name = format!("material_{}_{}", id, name);
+                let mut fn_code = compiled.wgsl_fn.replace("material_entry", &fn_name);
+                if single_texture {
+                    fn_code = use_single_texture(&fn_code);
+                }
+                out.push_str(&fn_code);
+                out.push_str("\n\n");
+                dispatch.push_str(&format!(
+                    "        case {}u: {{ return {}(in, col); }}\n",
+                    id, fn_name
+                ));
+            }
+            Err(error) => on_error(id, name, &error),
+        }
     }
 
     dispatch.push_str("        default: { return col; }\n");
     dispatch.push_str("    }\n}\n");
-
     out.push_str(&dispatch);
     out
+}
+
+/// Fallible generator (P0-1) for an explicit texture-binding mode.
+///
+/// `single_texture = true` selects the wasm32/WebGL2 form where `t_diffuse` is
+/// one texture instead of a binding array.
+pub fn try_generate_builtins_wgsl_for(single_texture: bool) -> Result<String, MaterialError> {
+    let mut first_error: Option<MaterialError> = None;
+    let wgsl = build_builtins_wgsl(single_texture, &mut |id, name, error| {
+        if first_error.is_none() {
+            first_error = Some(MaterialError::CompileError(format!(
+                "builtin material {id} ('{name}'): {error}"
+            )));
+        }
+    });
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(wgsl),
+    }
+}
+
+/// Fallible generator (P0-1) using the native texture binding array.
+pub fn try_generate_builtins_wgsl() -> Result<String, MaterialError> {
+    try_generate_builtins_wgsl_for(false)
+}
+
+/// Panic-free generator for an explicit texture-binding mode (P0-1).
+///
+/// A builtin that fails to compile is logged and omitted from the dispatch
+/// table; its material id falls through to the `default` branch, which returns
+/// the unchanged base color. This degrades one material instead of crashing
+/// renderer startup.
+pub fn generate_builtins_wgsl_lossy_for(single_texture: bool) -> String {
+    build_builtins_wgsl(single_texture, &mut |id, name, error| {
+        tracing::error!("[materials] skipping builtin material {id} ('{name}'): {error}");
+    })
+}
+
+/// Panic-free generator using the native texture binding array (P0-1).
+pub fn generate_builtins_wgsl_lossy() -> String {
+    generate_builtins_wgsl_lossy_for(false)
+}
+
+/// Historical public API, retained for compatibility.
+///
+/// Since P0-1 this is a thin wrapper over [`generate_builtins_wgsl_lossy`] and
+/// no longer panics on a malformed builtin graph.
+pub fn generate_builtins_wgsl() -> String {
+    generate_builtins_wgsl_lossy()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // P0-1 / P0-3: guard against a builtin silently disappearing from the
+    // generated dispatch table. `generate_builtins_wgsl_lossy` skips failures,
+    // so only this strict variant can prove every builtin still compiles.
+    #[test]
+    fn all_builtin_materials_compile() {
+        let generated =
+            try_generate_builtins_wgsl().expect("every builtin material graph must compile");
+        assert!(generated.contains("fn dispatch_material"));
+        for id in [
+            0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+        ] {
+            assert!(
+                generated.contains(&format!("case {id}u:")),
+                "builtin material {id} missing from dispatch table"
+            );
+        }
+    }
 
     #[test]
     fn test_solid_material_compiles() {

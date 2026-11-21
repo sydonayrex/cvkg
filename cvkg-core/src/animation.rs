@@ -5,7 +5,16 @@
 //! artifacts. Used by the layout engine and view modifiers to drive smooth
 //! transitions (e.g. magnetic pull, focus changes, scroll animations).
 
+use crate::numeric;
 use std::time::Duration;
+
+/// Minimum usable spring period (seconds). Below this, `omega` explodes.
+const MIN_PERIOD: f32 = 1.0e-3;
+/// Maximum usable spring period (seconds). Above this, a spring never settles.
+const MAX_PERIOD: f32 = 10.0;
+/// Maximum integration step. A long frame is clamped so a stalled frame cannot
+/// inject an unbounded impulse (classic large-dt spring instability).
+const MAX_DT: f32 = 0.25;
 
 /// Configuration for a critically-damped spring.
 ///
@@ -55,6 +64,25 @@ impl SpringConfig {
 impl Default for SpringConfig {
     fn default() -> Self {
         Self::snappy()
+    }
+}
+
+impl SpringConfig {
+    /// Returns a copy with every field constrained to its safe domain (P1-1).
+    ///
+    /// `set_config` intentionally keeps the caller's values so `config()` stays
+    /// lossless; this sanitized copy is used only by the integrator.
+    pub(crate) fn sanitized(&self) -> Self {
+        Self {
+            period: numeric::clamp_finite(
+                self.period,
+                MIN_PERIOD,
+                MAX_PERIOD,
+                Self::snappy().period,
+            ),
+            damping_ratio: numeric::clamp_finite(self.damping_ratio, 0.0, 4.0, 1.0),
+            epsilon: numeric::clamp_finite(self.epsilon, 0.0, 1.0, Self::snappy().epsilon),
+        }
     }
 }
 
@@ -110,7 +138,7 @@ impl SpringValue for f32 {
         self.max(s)
     }
     fn is_near_zero(self, epsilon: f32) -> bool {
-        self.abs() < epsilon
+        numeric::approx_zero(self, epsilon)
     }
     fn lerp(self, other: Self, t: f32) -> Self {
         self + (other - self) * t
@@ -128,7 +156,7 @@ impl SpringValue for glam::Vec2 {
         Self::new(self.x.max(s), self.y.max(s))
     }
     fn is_near_zero(self, epsilon: f32) -> bool {
-        self.x.abs() < epsilon && self.y.abs() < epsilon
+        numeric::approx_zero(self.x, epsilon) && numeric::approx_zero(self.y, epsilon)
     }
     fn lerp(self, other: Self, t: f32) -> Self {
         self + (other - self) * t
@@ -146,10 +174,10 @@ impl SpringValue for glam::Vec4 {
         Self::new(self.x.max(s), self.y.max(s), self.z.max(s), self.w.max(s))
     }
     fn is_near_zero(self, epsilon: f32) -> bool {
-        self.x.abs() < epsilon
-            && self.y.abs() < epsilon
-            && self.z.abs() < epsilon
-            && self.w.abs() < epsilon
+        numeric::approx_zero(self.x, epsilon)
+            && numeric::approx_zero(self.y, epsilon)
+            && numeric::approx_zero(self.z, epsilon)
+            && numeric::approx_zero(self.w, epsilon)
     }
     fn lerp(self, other: Self, t: f32) -> Self {
         self + (other - self) * t
@@ -206,18 +234,39 @@ impl<T: SpringValue + std::cmp::PartialEq> Animated<T> {
             return;
         }
 
-        let omega = 2.0 * std::f32::consts::PI / self.config.period;
-        let zeta = self.config.damping_ratio;
-        let displacement = self.value - self.target;
-        let acceleration =
-            displacement.mul_scalar(-omega * omega) + self.velocity.mul_scalar(-2.0 * zeta * omega);
-        self.velocity = self.velocity + acceleration.mul_scalar(dt);
-        self.value = self.value + self.velocity.mul_scalar(dt);
+        // P1-1: sanitize every float at the integration boundary. A NaN/Inf dt
+        // (e.g. from a broken clock) is treated as "no time passed" instead of
+        // poisoning velocity and value permanently.
+        let dt = numeric::clamp_finite(dt, 0.0, MAX_DT, 0.0);
+        if dt == 0.0 {
+            return;
+        }
+        let config = self.config.sanitized();
 
-        // Check convergence
-        if displacement.is_near_zero(self.config.epsilon)
-            && self.velocity.is_near_zero(self.config.epsilon)
-        {
+        let omega = numeric::safe_div(
+            2.0 * std::f32::consts::PI,
+            config.period,
+            2.0 * std::f32::consts::PI,
+        );
+        let zeta = config.damping_ratio;
+
+        // Explicit Euler is only stable while omega * step < 2. Splitting a
+        // long frame into substeps bounded by a tenth of the spring period
+        // keeps that invariant for any (sanitized) period and dt (P1-1).
+        let max_step = (config.period * 0.1).clamp(1.0e-4, MAX_DT);
+        let step_count = numeric::safe_div(dt, max_step, 1.0).ceil() as usize;
+        let step = numeric::safe_div(dt, step_count as f32, 0.0);
+        for _ in 0..step_count {
+            let displacement = self.value - self.target;
+            let acceleration = displacement.mul_scalar(-omega * omega)
+                + self.velocity.mul_scalar(-2.0 * zeta * omega);
+            self.velocity = self.velocity + acceleration.mul_scalar(step);
+            self.value = self.value + self.velocity.mul_scalar(step);
+        }
+
+        // Check convergence with the sanitized epsilon (P1-1).
+        let displacement = self.value - self.target;
+        if displacement.is_near_zero(config.epsilon) && self.velocity.is_near_zero(config.epsilon) {
             self.value = self.target;
             self.velocity = T::default();
             self.settled = true;
@@ -321,5 +370,55 @@ mod tests {
         }
         // Critically damped should not overshoot by more than ~5%
         assert!(max_val < 1.05, "overshoot: {}", max_val);
+    }
+
+    #[test]
+    fn non_finite_dt_does_not_poison_state() {
+        let mut anim = Animated::new(0.0f32, SpringConfig::snappy());
+        anim.set_target(1.0);
+        for _ in 0..5 {
+            anim.update(f32::NAN);
+            anim.update(f32::INFINITY);
+            anim.update(-0.016);
+        }
+        assert!(
+            anim.value.is_finite(),
+            "value became non-finite: {}",
+            anim.value
+        );
+        for _ in 0..100 {
+            anim.update(0.016);
+        }
+        assert!(anim.is_settled());
+        assert!(numeric::approx_eq(anim.value, 1.0, 1e-3));
+    }
+
+    #[test]
+    fn invalid_config_is_sanitized_integrator_side() {
+        let mut anim = Animated::new(
+            0.0f32,
+            SpringConfig {
+                period: 0.0,
+                damping_ratio: f32::NAN,
+                epsilon: f32::NAN,
+            },
+        );
+        anim.set_target(1.0);
+        for _ in 0..100 {
+            anim.update(0.016);
+        }
+        assert!(anim.value.is_finite());
+        assert!(anim.is_settled());
+        // The public config is unchanged (lossless), only the integrator sanitizes.
+        assert_eq!(anim.config().period, 0.0);
+    }
+
+    #[test]
+    fn huge_dt_is_clamped() {
+        let mut anim = Animated::new(0.0f32, SpringConfig::snappy());
+        anim.set_target(1.0);
+        anim.update(1000.0);
+        assert!(anim.value.is_finite());
+        assert!(anim.value.abs() < 10.0, "unbounded impulse from large dt");
     }
 }

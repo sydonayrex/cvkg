@@ -602,7 +602,12 @@ impl ActiveAnimation {
                     let mut sum_val = 0.0;
                     let mut all_finished = true;
                     for child in &mut self.child_states {
-                        let solver = child.solver.as_mut().unwrap();
+                        // P0-1: a child registered without a solver must not
+                        // abort the whole composition tick. Keep its current
+                        // value and treat it as already settled.
+                        let Some(solver) = child.solver.as_mut() else {
+                            continue;
+                        };
                         child.current_value = solver.tick(dt_secs);
                         if !solver.is_settled() {
                             all_finished = false;

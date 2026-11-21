@@ -20,6 +20,12 @@ pub enum FilterError {
     /// Texture allocation failed.
     #[error("texture allocation failed: {0}")]
     TextureError(String),
+    /// A filter uses a feature the current pipeline cannot render correctly.
+    ///
+    /// Returning this is preferred over silently emitting a wrong image: the
+    /// caller can surface the limitation instead of shipping corrupted output.
+    #[error("unsupported filter feature: {0}")]
+    Unsupported(String),
 }
 
 impl From<wgpu::Error> for FilterError {

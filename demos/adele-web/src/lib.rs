@@ -12,15 +12,73 @@ use cvkg_components::{
 use cvkg_core::{Never, Rect, Renderer, View};
 use wasm_bindgen::prelude::*;
 
+/// P1-3 spike: offscreen DOM accessibility / text bridge for the canvas demo.
+pub mod a11y_bridge;
+/// P1-4: runtime browser capability probe and graceful fallback notice.
+pub mod capability_probe;
 mod data;
 use data::{DesignSystem, FilterCriteria};
 
 const DATA_JSON: &str = include_str!("data.json");
 
+/// P1-3 spike: keeps the constructed bridge alive for the lifetime of the page.
+///
+/// A `wasm_bindgen`-visible handle is not used here on purpose; the bridge is
+/// driven from Rust via this one low-risk entry point so the existing canvas
+/// rendering path is left untouched.
+#[cfg(target_arch = "wasm32")]
+std::thread_local! {
+    static A11Y_SPIKE: std::cell::RefCell<Option<a11y_bridge::A11yBridge>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// P1-3 spike: create the DOM accessibility/text bridge for the canvas with
+/// the given element `id`, mirror two example nodes, and forward text-proxy
+/// events to the browser console via the existing `log` facade.
+///
+/// Returns an error (never panics) if the canvas is missing or a DOM operation
+/// fails. This function is additive: calling it does not change any existing
+/// demo rendering or interaction behavior.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+pub fn init_a11y_bridge_spike(canvas_id: &str) -> Result<(), JsValue> {
+    let mut bridge = a11y_bridge::A11yBridge::new(canvas_id)?;
+    bridge.attach_text_proxy(|event| {
+        log::info!("[a11y-spike] {:?}", event);
+    })?;
+    bridge.upsert_node(1, None, "heading", "ADELE design systems explorer")?;
+    bridge.upsert_node(2, Some(1), "textbox", "Search systems")?;
+    bridge.announce("Accessibility bridge spike initialized")?;
+    A11Y_SPIKE.with(|slot| *slot.borrow_mut() = Some(bridge));
+    Ok(())
+}
+
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Debug).unwrap();
+
+    // P1-4: probe browser graphics capabilities at startup and surface a
+    // perceivable fallback when neither WebGPU nor WebGL2 is available. This
+    // is additive: existing rendering and the P1-3 a11y bridge are untouched.
+    let capabilities = capability_probe::detect_capabilities();
+    log::info!(
+        "[capability-probe] webgpu={} webgl2={} is_webkit_like={} tier={:?}",
+        capabilities.webgpu,
+        capabilities.webgl2,
+        capabilities.is_webkit_like,
+        capabilities.recommended_tier()
+    );
+    if let Some(reason) = capabilities.fallback_reason() {
+        log::warn!("[capability-probe] {}", reason);
+        if let Err(error) = capability_probe::show_unsupported_notice() {
+            log::error!(
+                "[capability-probe] failed to show unsupported notice: {}",
+                error
+            );
+        }
+    }
+
     Ok(())
 }
 

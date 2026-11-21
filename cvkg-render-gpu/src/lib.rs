@@ -34,6 +34,8 @@
 pub mod error;
 pub mod kvasir;
 mod material;
+// P0-3: single source of truth for composed WGSL programs (runtime + tests).
+pub(crate) mod shader_composition;
 
 // Re-export material types for downstream users
 pub use material::builtins;

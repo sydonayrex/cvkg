@@ -359,7 +359,7 @@ pub fn merge_manifests(input: TokenStream) -> TokenStream {
                 #(&#manifests),*
             ]);
         };
-        
+
         // Build the merged manifest reference
         pub static _MERGED_MANIFEST: cvkg_core::frame_manifest::FrameManifest = cvkg_core::frame_manifest::build_merged_manifest(&[
             #(&#manifests),*
@@ -841,7 +841,17 @@ pub fn cvkg_gallery_component(attr: TokenStream, item: TokenStream) -> TokenStre
             };
 
             // Generate default value string
-            let default = if read_only { "N/A".to_string() } else if field_type_str.contains("bool") { "false".to_string() } else if field_type_str.contains("String") { "\"\"".to_string() } else if field_type_str.contains("f32") || field_type_str.contains("f64") { "0".to_string() } else { "default()".to_string() };
+            let default = if read_only {
+                "N/A".to_string()
+            } else if field_type_str.contains("bool") {
+                "false".to_string()
+            } else if field_type_str.contains("String") {
+                "\"\"".to_string()
+            } else if field_type_str.contains("f32") || field_type_str.contains("f64") {
+                "0".to_string()
+            } else {
+                "default()".to_string()
+            };
 
             prop_metas.push(quote! {
                 crate::ComponentPropMeta {
@@ -906,15 +916,12 @@ impl Parse for ComponentGalleryArgs {
             }
         }
 
-        Ok(Self { name, category, description })
+        Ok(Self {
+            name,
+            category,
+            description,
+        })
     }
 }
-
-#[cfg(test)]
-mod smoke_tests {
-    #[test]
-    fn test_compiles() {
-        // Proc-macro crates cannot unit test macro expansion in-process.
-        // This placeholder verifies the crate compiles and the test harness works.
-    }
-}
+// P2-5: removed a duplicate `mod smoke_tests` placeholder that made
+// `cargo test --workspace` fail with E0428. The canonical one is at line ~749.

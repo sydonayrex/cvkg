@@ -11,7 +11,7 @@ cd cvkg
 
 ## 2. Install Rust Toolchain
 
-Requires Rust 1.85.0 or later (Edition 2024):
+Requires Rust 1.95 or later (Edition 2024; see `rust-version` in `Cargo.toml`):
 
 ```bash
 rustup toolchain install stable

@@ -101,7 +101,7 @@ struct VertexInput {
     @location(8) size:     vec2<f32>,
     @location(9) clip:     vec4<f32>,
     @location(10) tex_index:   u32,
-    
+
     // --- Instance Data ---
     @location(11) translation: vec2<f32>,
     @location(12) scale:       vec2<f32>,
@@ -145,6 +145,51 @@ struct VertexInput3D {
     @location(9) uv_scale:  vec2<f32>,
     @location(10) uv_offset: vec2<f32>,
 };
+
+// ── Numeric guards (P1-2) ─────────────────────────────────────────────────
+// Mirrors the CPU-side policy in cvkg_core::numeric. The composed programs
+// include this preamble, so every material/stage shader can use these helpers.
+const NUMERIC_EPS: f32 = 1.0e-6;
+
+/// Explicit finite check. Naga 29 / WebGPU WGSL does not expose an `isFinite`
+/// builtin, so NaN is detected via `v != v` and infinities via a magnitude
+/// bound. Callers must negate this to test for non-finite values.
+fn is_finite_f32(v: f32) -> bool {
+    return (v == v) && (v < 3.4028235e38) && (v > -3.4028235e38);
+}
+
+/// Division that returns `fallback` for zero/near-zero, non-finite or
+/// overflowing denominators. Prevents a single bad uniform from producing
+/// NaN that then poisons an entire framebuffer.
+fn safe_div_f32(numerator: f32, denominator: f32, fallback: f32) -> f32 {
+    if (!is_finite_f32(denominator) || abs(denominator) <= NUMERIC_EPS) {
+        return fallback;
+    }
+    let result = numerator / denominator;
+    if (!is_finite_f32(result)) {
+        return fallback;
+    }
+    return result;
+}
+
+/// Normalization with an explicit fallback for zero-length / non-finite input.
+/// `normalize(vec3(0.0))` is undefined in WGSL and produce NaN lighting.
+fn safe_normalize_vec3(v: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
+    let len_sq = dot(v, v);
+    if (!is_finite_f32(len_sq) || len_sq < NUMERIC_EPS * NUMERIC_EPS) {
+        return fallback;
+    }
+    return v * inverseSqrt(len_sq);
+}
+
+/// `vec2<f32>` counterpart of [`safe_normalize_vec3`] for screen-space optics.
+fn safe_normalize_vec2(v: vec2<f32>, fallback: vec2<f32>) -> vec2<f32> {
+    let len_sq = dot(v, v);
+    if (!is_finite_f32(len_sq) || len_sq < NUMERIC_EPS * NUMERIC_EPS) {
+        return fallback;
+    }
+    return v * inverseSqrt(len_sq);
+}
 
 @vertex
 fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {

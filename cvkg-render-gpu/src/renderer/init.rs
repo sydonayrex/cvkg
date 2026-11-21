@@ -5,18 +5,24 @@ use crate::renderer::context_helpers::{
 };
 use crate::renderer::pipelines::compile_render_pipelines;
 use crate::renderer::{GpuRenderer, QualityLevel};
-use crate::types::{
-    GpuParticle, HeadlessContext, ParticleUniforms, SurfaceContext,
-};
-use crate::{
-    WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND, WGSL_COMMON, WGSL_MATERIAL_GLASS,
-    WGSL_MATERIAL_OPAQUE, WGSL_MATERIAL_PBR, WGSL_MATERIAL_SHADOW, WGSL_SHAPES,
-};
+use crate::types::{GpuParticle, HeadlessContext, ParticleUniforms, SurfaceContext};
 use cvkg_core::{ColorTheme, Rect, SceneUniforms};
 use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+
+/// P0-1: never panic when a capacity/count input is zero.
+///
+/// Capabilities and cache sizes normally come from constants or a GPU tier,
+/// but a future tier could legitimately report zero. Degrade to the smallest
+/// valid value and warn instead of aborting renderer startup at `unwrap`.
+fn nonzero_capacity(n: usize) -> NonZeroUsize {
+    NonZeroUsize::new(n).unwrap_or_else(|| {
+        tracing::warn!("[GPU] nonzero capacity input was 0; using minimum");
+        NonZeroUsize::MIN
+    })
+}
 
 impl GpuRenderer {
     /// forge -- Initializes the Surtr GPU renderer from a winit window.
@@ -357,52 +363,26 @@ impl GpuRenderer {
             );
             None
         };
-        let materials_generated = crate::material::generate_builtins_wgsl();
+        // P0-1: generating the builtin material WGSL must never panic at
+        // runtime. The lossy variant logs and skips any builtin that fails to
+        // compile instead of unwrapping the Result. P0-3: the texture-binding
+        // form is selected from the same shader set the tests validate.
+        let shader_set = crate::shader_composition::active_shader_set();
+        let materials_generated = crate::shader_composition::generated_materials_for(&shader_set);
 
-        let wgsl_src = format!(
-            "{}{}{}{}{}{}",
-            WGSL_COMMON,
-            WGSL_SHAPES,
-            WGSL_BIFROST,
-            WGSL_BLOOM,
-            WGSL_COLOR_BLIND,
-            materials_generated
-        );
-        let wgsl_opaque = format!(
-            "{}{}{}{}{}{}",
-            WGSL_COMMON,
-            WGSL_MATERIAL_OPAQUE,
-            WGSL_BIFROST,
-            WGSL_BLOOM,
-            WGSL_COLOR_BLIND,
-            materials_generated
-        );
-        let wgsl_glass = format!(
-            "{}{}{}{}{}{}",
-            WGSL_COMMON,
-            WGSL_MATERIAL_GLASS,
-            WGSL_BIFROST,
-            WGSL_BLOOM,
-            WGSL_COLOR_BLIND,
-            materials_generated
-        );
-        let wgsl_pbr = format!(
-            "{}{}{}{}{}{}",
-            WGSL_COMMON,
-            WGSL_MATERIAL_PBR,
-            WGSL_BIFROST,
-            WGSL_BLOOM,
-            WGSL_COLOR_BLIND,
-            materials_generated
-        );
-        let wgsl_shadow = format!(
-            "{}{}{}",
-            WGSL_COMMON, WGSL_MATERIAL_SHADOW, materials_generated
-        );
+        // P0-3: compose all shader programs through the shared module. The
+        // composed-shader validation tests use this exact function, so the
+        // strings validated in CI are byte-for-byte the strings compiled here.
+        let variants = crate::shader_composition::composed_variants(&materials_generated);
+        let wgsl_src = &variants[0].source;
+        let wgsl_opaque = &variants[1].source;
+        let wgsl_glass = &variants[2].source;
+        let wgsl_pbr = &variants[3].source;
+        let wgsl_shadow = &variants[4].source;
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Surtr Main Shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Owned(wgsl_src)),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_src.as_str())),
         });
 
         #[cfg(target_arch = "wasm32")]
@@ -541,37 +521,37 @@ impl GpuRenderer {
             });
 
         // Create GI bind group layout. Two entries:
-//   binding 0: GiHeader uniform buffer (volume params, ≤64 bytes)
-//   binding 1: read-only storage buffer for the 4096 SH probe coefficients.
-// We split them because the probe grid is 4096 * (4 * vec3<f32>) = 256 KB,
-// which exceeds the default 64 KB uniform-buffer limit in wgpu/WebGPU.
-// Every real GI implementation uses a storage buffer for irradiance volumes.
-let gi_bind_group_layout =
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            },
-        ],
-        label: Some("Surtr GI Bind Group Layout"),
-    });
+        //   binding 0: GiHeader uniform buffer (volume params, ≤64 bytes)
+        //   binding 1: read-only storage buffer for the 4096 SH probe coefficients.
+        // We split them because the probe grid is 4096 * (4 * vec3<f32>) = 256 KB,
+        // which exceeds the default 64 KB uniform-buffer limit in wgpu/WebGPU.
+        // Every real GI implementation uses a storage buffer for irradiance volumes.
+        let gi_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+                label: Some("Surtr GI Bind Group Layout"),
+            });
 
         let pbr_material_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -800,8 +780,9 @@ let gi_bind_group_layout =
             ..Default::default()
         });
 
-        let mut texture_views_list: Vec<wgpu::TextureView> =
-            (0..tier.texture_array_count).map(|_| dummy_view.clone()).collect();
+        let mut texture_views_list: Vec<wgpu::TextureView> = (0..tier.texture_array_count)
+            .map(|_| dummy_view.clone())
+            .collect();
         texture_views_list[0] = mega_heim_view_obj.clone();
 
         let views_refs: Vec<&wgpu::TextureView> = texture_views_list.iter().collect();
@@ -820,7 +801,8 @@ let gi_bind_group_layout =
             label: Some("Mega-Heim Bind Group"),
         });
 
-        let dummy_views_refs: Vec<&wgpu::TextureView> = (0..tier.texture_array_count).map(|_| &dummy_view).collect();
+        let dummy_views_refs: Vec<&wgpu::TextureView> =
+            (0..tier.texture_array_count).map(|_| &dummy_view).collect();
         let dummy_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
@@ -916,8 +898,7 @@ let gi_bind_group_layout =
             ..wgpu::SamplerDescriptor::default()
         });
 
-        let mut texture_registry =
-            LruCache::new(NonZeroUsize::new(tier.texture_registry_capacity).unwrap());
+        let mut texture_registry = LruCache::new(nonzero_capacity(tier.texture_registry_capacity));
         let mut texture_bind_groups = Vec::new();
 
         // Index 0 is permanently reserved for the Mega-Heim atlas. Loaded images start at 1.
@@ -1014,9 +995,7 @@ let gi_bind_group_layout =
             .min(gi_defaults.probe_coefficients.len());
         let gi_probe_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Surtr GI Probe Buffer"),
-            contents: bytemuck::cast_slice(
-                &gi_defaults.probe_coefficients[..probe_init_len],
-            ),
+            contents: bytemuck::cast_slice(&gi_defaults.probe_coefficients[..probe_init_len]),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         tracing::info!(
@@ -1217,10 +1196,10 @@ let gi_bind_group_layout =
             mega_heim_bind_group,
             config: crate::subsystems::RendererConfig::default(),
             capability_tier: tier.clone(),
-            text: crate::types::TextSubsystem::forge(NonZeroUsize::new(8192).unwrap()),
+            text: crate::types::TextSubsystem::forge(nonzero_capacity(8192)),
             heim_packer: SkylinePacker::new(tier.mega_heim_size, tier.mega_heim_size),
             image_uv_registry: {
-                let mut cache = LruCache::new(NonZeroUsize::new(256).unwrap());
+                let mut cache = LruCache::new(nonzero_capacity(256));
                 cache.put(
                     "__mega_heim".to_string(),
                     cvkg_core::Rect {
@@ -1242,8 +1221,8 @@ let gi_bind_group_layout =
             svg: crate::types::SvgSubsystem::forge(
                 &device,
                 &queue,
-                NonZeroUsize::new(512).unwrap(),
-                NonZeroUsize::new(512).unwrap(),
+                nonzero_capacity(512),
+                nonzero_capacity(512),
             ),
             dummy_texture_bind_group,
             gradient_stop_texture: dummy_texture.clone(),
@@ -1255,7 +1234,7 @@ let gi_bind_group_layout =
             dummy_env_bind_group,
             texture_bind_group_layout,
             texture_bind_groups,
-            shared_elements: LruCache::new(NonZeroUsize::new(1024).unwrap()),
+            shared_elements: LruCache::new(nonzero_capacity(1024)),
             geometry_buffers,
             vertices: Vec::with_capacity(tier.max_vertices),
             indices: Vec::with_capacity(tier.max_indices),
@@ -1330,7 +1309,7 @@ let gi_bind_group_layout =
             volumetric_enabled: false,
             deferred_enabled: true,
             frame_counter: 0,
-            path_geometry_cache: lru::LruCache::new(NonZeroUsize::new(64).unwrap()),
+            path_geometry_cache: lru::LruCache::new(nonzero_capacity(64)),
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
             color_blind_pipeline: pipes.color_blind_pipeline,
@@ -1366,7 +1345,9 @@ let gi_bind_group_layout =
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                            resource: wgpu::BindingResource::Sampler(
+                                &device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                            ),
                         },
                         wgpu::BindGroupEntry {
                             binding: 2,
@@ -1374,7 +1355,9 @@ let gi_bind_group_layout =
                         },
                         wgpu::BindGroupEntry {
                             binding: 3,
-                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                            resource: wgpu::BindingResource::Sampler(
+                                &device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                            ),
                         },
                         wgpu::BindGroupEntry {
                             binding: 4,
@@ -1382,7 +1365,9 @@ let gi_bind_group_layout =
                         },
                         wgpu::BindGroupEntry {
                             binding: 5,
-                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                            resource: wgpu::BindingResource::Sampler(
+                                &device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                            ),
                         },
                         wgpu::BindGroupEntry {
                             binding: 6,
@@ -1390,7 +1375,9 @@ let gi_bind_group_layout =
                         },
                         wgpu::BindGroupEntry {
                             binding: 7,
-                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                            resource: wgpu::BindingResource::Sampler(
+                                &device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                            ),
                         },
                     ],
                 })
@@ -1407,7 +1394,9 @@ let gi_bind_group_layout =
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                            resource: wgpu::BindingResource::Sampler(
+                                &device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                            ),
                         },
                         wgpu::BindGroupEntry {
                             binding: 2,
@@ -1415,7 +1404,9 @@ let gi_bind_group_layout =
                         },
                         wgpu::BindGroupEntry {
                             binding: 3,
-                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                            resource: wgpu::BindingResource::Sampler(
+                                &device.create_sampler(&wgpu::SamplerDescriptor::default()),
+                            ),
                         },
                     ],
                 })

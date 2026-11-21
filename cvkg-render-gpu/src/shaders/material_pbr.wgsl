@@ -24,7 +24,7 @@ fn ggx_ndf(n_dot_h: f32, roughness: f32) -> f32 {
 fn geometry_schlick_ggx(n_dot_v: f32, roughness: f32) -> f32 {
     let r = roughness + 1.0;
     let k = (r * r) / 8.0;
-    return n_dot_v / (n_dot_v * (1.0 - k) + k);
+    return safe_div_f32(n_dot_v, n_dot_v * (1.0 - k) + k, 0.0);
 }
 
 fn geometry_smith(n_dot_v: f32, n_dot_l: f32, roughness: f32) -> f32 {
@@ -55,7 +55,12 @@ fn sample_irradiance_volume(world_pos: vec3<f32>, normal: vec3<f32>) -> vec3<f32
     let volume_origin = vec3<f32>(-50.0, 0.0, -50.0);
     let volume_spacing = vec3<f32>(10.0, 5.0, 10.0);
 
-    let grid_pos = (world_pos - volume_origin) / volume_spacing;
+    // P1-2: guard each component; a zero spacing previously produced Inf.
+    let grid_pos = vec3<f32>(
+        safe_div_f32(world_pos.x - volume_origin.x, volume_spacing.x, 0.0),
+        safe_div_f32(world_pos.y - volume_origin.y, volume_spacing.y, 0.0),
+        safe_div_f32(world_pos.z - volume_origin.z, volume_spacing.z, 0.0)
+    );
     let grid_cell = floor(grid_pos);
     let f = fract(grid_pos);
 
@@ -82,14 +87,16 @@ fn sample_irradiance_volume(world_pos: vec3<f32>, normal: vec3<f32>) -> vec3<f32
 /// Samples the shadow atlas at the mapped coordinates for the given cascade.
 fn sample_shadow_atlas(cascade_idx: u32, light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
     let light_pos = light_vp * vec4<f32>(world_pos, 1.0);
-    let light_uv = light_pos.xy / light_pos.w * 0.5 + 0.5;
-    let light_depth = light_pos.z / light_pos.w;
+    // P1-2: a zero homogeneous w used to produce Inf UVs/depth.
+    let inv_w = safe_div_f32(1.0, light_pos.w, 0.0);
+    let light_uv = light_pos.xy * inv_w * 0.5 + 0.5;
+    let light_depth = light_pos.z * inv_w;
 
     let col = f32(cascade_idx % 2u);
     let row = f32(cascade_idx / 2u);
     let atlas_uv = (light_uv * 0.5) + vec2<f32>(col * 0.5, row * 0.5);
 
-    let texel_size = 1.0 / (scene.shadow_map_size * 2.0);
+    let texel_size = safe_div_f32(1.0, scene.shadow_map_size * 2.0, 0.0);
     var shadow = 0.0;
     for (var dx = -1; dx <= 1; dx++) {
         for (var dy = -1; dy <= 1; dy++) {
@@ -112,8 +119,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let roughness = in.slice.y;
         let opacity  = in.slice.z;
 
-        let n = normalize(in.normal);
-        let light_dir = normalize(scene.light_direction);
+        let n = safe_normalize_vec3(in.normal, vec3<f32>(0.0, 0.0, 1.0));
+        let light_dir = safe_normalize_vec3(scene.light_direction, vec3<f32>(0.0, 0.0, 1.0));
         let light_color = scene.light_color;
 
         // Shadow mapping (CSM)
@@ -129,8 +136,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_vp = csm.cascade_vps[cascade_idx];
         let shadow = sample_shadow_atlas(cascade_idx, light_vp, in.world_pos_3d);
 
-        let view_dir = normalize(scene.camera_pos - in.world_pos_3d);
-        let half_dir = normalize(light_dir + view_dir);
+        let view_dir = safe_normalize_vec3(scene.camera_pos - in.world_pos_3d, vec3<f32>(0.0, 0.0, 1.0));
+        let half_dir = safe_normalize_vec3(light_dir + view_dir, vec3<f32>(0.0, 0.0, 1.0));
 
         let n_dot_v = max(dot(n, view_dir), 0.0001);
         let n_dot_l = max(dot(n, light_dir), 0.0001);
@@ -239,7 +246,7 @@ struct GBufferOutput {
 
 @fragment
 fn fs_gbuffer(in: VertexOutput) -> GBufferOutput {
-    let n = normalize(in.normal);
+    let n = safe_normalize_vec3(in.normal, vec3<f32>(0.0, 0.0, 1.0));
     // Pack normal to [0,1] range
     var out: GBufferOutput;
     out.albedo = vec4<f32>(in.color.rgb, 1.0);

@@ -85,6 +85,7 @@ Typical call sequence:
 ## Edge cases and limitations
 
 - **Unsupported primitives**: If `usvg` produces a filter primitive kind that has no corresponding WGPU pipeline, evaluation returns a `FilterError`.
+- **`feComponentTransfer` is single-function only**: The GPU shader applies one transfer function to all four channels. Filters whose `func_g`/`func_b`/`func_a` differ from `func_r` are rejected with `FilterError::Unsupported` rather than silently rendered with the R function. When all four functions are equal, the single function is applied to every channel as before. Note that `table`/`discrete` functions currently pass through unchanged (no per-channel LUT is uploaded), and the gamma path leaves alpha untouched — these are separate, pre-existing limitations; this crate does not claim full SVG filter fidelity.
 - **Cyclic references**: The graph is validated as a DAG; cycles are rejected during construction.
 - **Resource exhaustion**: Large filter chains with many intermediate results may exhaust GPU memory. The `TransientFilterPool` mitigates this through resource recycling, but extremely wide graphs can still OOM.
 - **usvg version coupling**: This crate targets `usvg 0.47`. A breaking change in `usvg::filter::Kind` or related types will require an update.

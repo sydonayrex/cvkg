@@ -320,7 +320,13 @@ mod tests {
         let rebuilt_button_id = cvkg_core::KvasirId(3);
         rebuilt_root.children = vec![rebuilt_button_id];
         let rebuilt_button = interactive_node(3, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+        // A real rebuild re-registers handlers on the new node id. Cloning the
+        // handler map alone leaves the rebuilt button (id 3) without handlers,
+        // so every fallback dispatch is correctly reported as Ignored.
         rebuilt.event_handlers = pressed.event_handlers.clone();
+        if let Some(handlers) = pressed.event_handlers.get(&old_button_id).cloned() {
+            rebuilt.event_handlers.insert(rebuilt_button_id, handlers);
+        }
         rebuilt.root = Some(root_id);
         rebuilt.nodes.insert(root_id, rebuilt_root);
         rebuilt.nodes.insert(rebuilt_button_id, rebuilt_button);

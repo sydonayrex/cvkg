@@ -47,8 +47,23 @@ impl GpuFramePtrGuard {
     /// Set the thread-local raw pointer. Cleared automatically on drop.
     ///
     /// # Safety
-    /// `ptr` must reference memory that outlives this guard (typically a MutexGuard).
-    pub(crate) unsafe fn set(ptr: *mut cvkg_render_gpu::GpuRenderer) -> Self {
+    /// `ptr` must reference memory that outlives this guard (typically a
+    /// MutexGuard). `gpu` must be the mutex that currently holds that guard.
+    pub(crate) unsafe fn set(
+        gpu: &std::sync::Mutex<cvkg_render_gpu::GpuRenderer>,
+        ptr: *mut cvkg_render_gpu::GpuRenderer,
+    ) -> Self {
+        // P0-2: debug-mode liveness check for the core UB invariant. A
+        // `std::sync::Mutex` is not reentrant, so `try_lock` reports WouldBlock
+        // precisely while this thread holds the guard that produced `ptr`.
+        // This cannot make an invalid pointer valid, but it catches the common
+        // misuse (publishing the pointer after the guard was released).
+        debug_assert!(
+            matches!(gpu.try_lock(), Err(std::sync::TryLockError::WouldBlock)),
+            "GpuFramePtrGuard requires the renderer mutex to be held by this thread"
+        );
+        // SAFETY: caller guarantees the mutex guard outlives `Self`, and the
+        // check above verifies it is live at publication time.
         GPU_FRAME_PTR.with(|cell| cell.set(ptr));
         Self
     }
@@ -451,8 +466,13 @@ impl cvkg_core::Renderer for NativeRenderer {
         let new_top = if self.translation_stack.is_empty() {
             glam::Vec2::new(rect.x, rect.y)
         } else {
-            // Compose with the parent's offset to get the new top.
-            let parent = *self.translation_stack.last().unwrap();
+            // P0-1: guarded by `is_empty` above; `unwrap_or` removes the panic
+            // path without changing behavior for any valid stack.
+            let parent = self
+                .translation_stack
+                .last()
+                .copied()
+                .unwrap_or(glam::Vec2::ZERO);
             parent + glam::Vec2::new(rect.x, rect.y)
         };
         self.translation_stack.push(new_top);
@@ -663,6 +683,10 @@ impl cvkg_core::Renderer for NativeRenderer {
         if state == RenderIntensityMode::GodMode {
             tracing::info!("ENTERING GOD MODE: Activating Berserker Determinism (High Priority)");
             #[cfg(target_os = "linux")]
+            // SAFETY (P0-2): `setpriority` is a syscall with no pointer
+            // arguments. `PRIO_PROCESS` with id 0 targets the calling process,
+            // which is always valid; the return code is checked below. Failure
+            // is non-fatal and has no memory-safety consequence.
             unsafe {
                 let ret = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
                 if ret != 0 {
@@ -674,6 +698,9 @@ impl cvkg_core::Renderer for NativeRenderer {
             }
         } else {
             #[cfg(target_os = "linux")]
+            // SAFETY (P0-2): same syscall/invariant as above. Ignoring errno is
+            // intentional: restoring the default priority is best-effort and
+            // must not mask the original rendering result.
             unsafe {
                 let _ = libc::setpriority(libc::PRIO_PROCESS, 0, 0);
             }

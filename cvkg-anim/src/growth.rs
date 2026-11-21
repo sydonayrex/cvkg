@@ -194,13 +194,15 @@ impl LSystem {
 
         for ch in input.chars() {
             if let Some(rules) = self.rules.get(&ch) {
-                if rules.len() == 1 {
+                if let Some(only) = rules.iter().next().filter(|_| rules.len() == 1) {
                     // Fast path: deterministic single rule.
-                    output.push_str(&rules[0].successor);
-                } else {
+                    output.push_str(&only.successor);
+                } else if let Some(chosen) = self.pick_stochastic(rules) {
                     // Stochastic: pick by normalised probability.
-                    let chosen = self.pick_stochastic(rules);
                     output.push_str(&chosen.successor);
+                } else {
+                    // P0-1: an empty rule vector is treated like a missing rule.
+                    output.push(ch);
                 }
             } else {
                 // No rule → identity (the character passes through unchanged).
@@ -212,10 +214,14 @@ impl LSystem {
     }
 
     /// Pick a rule from a slice using weighted random selection.
-    fn pick_stochastic<'a>(&'a self, rules: &'a [LRule]) -> &'a LRule {
+    ///
+    /// Returns `None` for an empty slice instead of panicking (P0-1).
+    fn pick_stochastic<'a>(&'a self, rules: &'a [LRule]) -> Option<&'a LRule> {
+        let first = rules.first()?;
         let total_weight: f32 = rules.iter().map(|r| r.probability).sum();
-        if total_weight <= 0.0 {
-            return &rules[0];
+        // P1-1: a non-finite total would make every threshold comparison false.
+        if !total_weight.is_finite() || total_weight <= 0.0 {
+            return Some(first);
         }
 
         // Use seed-derived RNG or fallback to a simple deterministic hash.
@@ -226,12 +232,12 @@ impl LSystem {
         for rule in rules {
             cumulative += rule.probability;
             if cumulative >= threshold {
-                return rule;
+                return Some(rule);
             }
         }
 
         // Fallback (floating point edge case).
-        rules.last().unwrap()
+        Some(rules.last().unwrap_or(first))
     }
 
     /// Build a simple deterministic PRNG from `self.seed` or a derivation

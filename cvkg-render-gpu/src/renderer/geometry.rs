@@ -3,9 +3,9 @@
 //! Extracted from draw.rs for modularization.
 //! Contains fill_rect, shatter effects, lightning bolt effects, and oriented quad rendering.
 
+use crate::renderer::GpuRenderer;
 use crate::types::*;
 use crate::vertex::Vertex;
-use crate::renderer::GpuRenderer;
 use cvkg_core::{Rect, Renderer};
 
 impl GpuRenderer {
@@ -209,19 +209,24 @@ impl GpuRenderer {
         // CRITICAL FIX: Only break batch on material/scissor/texture state changes.
         // Transform (translation/scale/rotation) is per-instance data.
         let last_call = self.draw_calls.last();
+        // P0-1: `is_empty()` short-circuits; `is_none_or` removes the
+        // per-field unwrap cluster without changing batching semantics.
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
-            || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().panel_id != self.current_panel_id
-            || last_call.unwrap().material != Self::resolve_material_with_context(material_id, &self.current_draw_material)
-            || {
-                let last_material = last_call.unwrap().material;
-                let current_material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
-                matches!((current_material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || last_call.is_none_or(|c| {
+                let current_material =
+                    Self::resolve_material_with_context(material_id, &self.current_draw_material);
+                c.scissor_rect != scissor
+                    || c.panel_id != self.current_panel_id
+                    || c.material != current_material
+                    || {
+                        let last_material = c.material;
+                        matches!((current_material, last_material),
+                            (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
+                             cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
+                            if a != d || b != e || c != f)
+                    }
+            });
 
         if needs_new_call {
             self.current_texture_id = texture_id;
@@ -234,7 +239,10 @@ impl GpuRenderer {
                 index_start: self.indices.len() as u32,
                 index_count: 0,
                 instance_count: 1,
-                material: Self::resolve_material_with_context(material_id, &self.current_draw_material),
+                material: Self::resolve_material_with_context(
+                    material_id,
+                    &self.current_draw_material,
+                ),
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
@@ -281,7 +289,8 @@ impl GpuRenderer {
 
         // Push indices for the quad (two triangles: 0-1-2 and 0-2-3)
         let base = self.vertices.len() as u32 - 4;
-        self.indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+        self.indices
+            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
 
         if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += 6;
@@ -340,7 +349,8 @@ impl GpuRenderer {
 
         let scissor = self.clip_stack.last().copied();
 
-        let material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
+        let material =
+            Self::resolve_material_with_context(material_id, &self.current_draw_material);
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
         // Phase 3b/3c: overlay parent Renderer's translation.
@@ -376,19 +386,22 @@ impl GpuRenderer {
         // Transform (translation/scale/rotation) is per-instance data and should NOT
         // break the batch - multiple instances with different transforms can share a draw call.
         let last_call = self.draw_calls.last();
+        // P0-1: see the sibling batching check above for the invariant.
         let needs_new_call = self.draw_calls.is_empty()
-            || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().panel_id != self.current_panel_id
-            || last_call.unwrap().material != material
-            || last_call.unwrap().texture_id != self.current_texture_id
-            || {
-                // Check if glass/blur state changed (these require pipeline changes)
-                let last_material = last_call.unwrap().material;
-                matches!((material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || last_call.is_none_or(|c| {
+                c.scissor_rect != scissor
+                    || c.panel_id != self.current_panel_id
+                    || c.material != material
+                    || c.texture_id != self.current_texture_id
+                    || {
+                        // Check if glass/blur state changed (pipeline change)
+                        let last_material = c.material;
+                        matches!((material, last_material),
+                            (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
+                             cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
+                            if a != d || b != e || c != f)
+                    }
+            });
 
         if needs_new_call {
             self.current_texture_id = Some(0); // All textures are now in the binding array at Group 0

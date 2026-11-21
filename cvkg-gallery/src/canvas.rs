@@ -92,14 +92,17 @@ impl View for GalleryCanvas {
                 renderer.pop_transform();
             }
         } else {
-            // Empty state - no component selected
+            // Empty state — no component selected.
+            // WHY local coordinates: push_vnode(rect) shifts renderer_translation by
+            // (rect.x, rect.y). Drawing with rect.x+... would double-offset the text.
+            // Use local origin (0,0) inside the vnode so final screen pos = rect.x + local_x.
             renderer.push_vnode(rect, "GalleryCanvas");
             let msg = "Select a component from the sidebar";
             let msg_w = renderer.measure_text(msg, 16.0).0;
             renderer.draw_text_raw(
                 msg,
-                rect.x + (rect.width - msg_w) / 2.0,
-                rect.y + rect.height / 2.0,
+                (rect.width - msg_w) / 2.0,
+                rect.height / 2.0,
                 16.0,
                 [0.5, 0.5, 0.5, 1.0],
             );
