@@ -117,6 +117,13 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **WebKitGTK verification:** drove the wasm demo in WebKitGTK 2.54.3 via
+  PyGObject. Found and fixed a real fallback bug: `forge_headless` panicked on
+  engines without WebGPU before the software fallback could run. Added a
+  `navigator.gpu.requestAdapter()` preflight; WebKit now logs a clean fallback
+  and renders real canvas pixels. Confirmed mirrored a11y nodes and the
+  `Ctrl+K`/typing path (`insert ab`) in WebKit. Safari/iOS remain untested.
+
 - **Web hit-testing/caret/shortcuts:** `web_input.rs` now maps pointer events
   to three fixed canvas regions, maintains a text buffer with byte-index caret
   and editing commands, and matches a declarative `KeyShortcut` table

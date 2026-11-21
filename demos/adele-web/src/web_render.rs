@@ -133,6 +133,28 @@ pub async fn render_gpu_once(
 ) -> Result<(), wasm_bindgen::JsValue> {
     use cvkg_core::FrameRenderer;
     use cvkg_render_gpu::GpuRenderer;
+    use wasm_bindgen::JsCast;
+
+    // WebKitGTK has WebGL2 but no WebGPU. wgpu's GL backend cannot provide a
+    // renderer adapter here, and forge_headless panics rather than returning
+    // Err — which would skip our software fallback entirely. Preflight the
+    // browser API so unsupported engines get a clean Err and the caller falls
+    // back instead of unwinding through a wasm task.
+    let navigator = web_sys::window()
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("no window"))?
+        .navigator();
+    let gpu = js_sys::Reflect::get(&navigator, &js_sys::JsString::from("gpu"))?;
+    if gpu.is_undefined() || gpu.is_null() {
+        return Err(wasm_bindgen::JsValue::from_str("WebGPU unavailable"));
+    }
+    let request_adapter = js_sys::Reflect::get(&gpu, &js_sys::JsString::from("requestAdapter"))?
+        .dyn_into::<js_sys::Function>()
+        .map_err(|_| wasm_bindgen::JsValue::from_str("requestAdapter missing"))?;
+    let promise = request_adapter.call0(&gpu)?;
+    let adapter = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::from(promise)).await?;
+    if adapter.is_null() || adapter.is_undefined() {
+        return Err(wasm_bindgen::JsValue::from_str("no WebGPU adapter"));
+    }
 
     let document = web_sys::window()
         .ok_or_else(|| wasm_bindgen::JsValue::from_str("no window"))?

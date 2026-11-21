@@ -126,3 +126,31 @@ Conclusion: the DOM fallback element and the plain-data probe work in a real bro
 Screenshots: `/tmp/opencode/probe.png`, `/tmp/opencode/probe-nogpu.png` (session-local, not committed).
 
 **This is not WebKit/Safari verification.** No Apple browser or WebKit engine was available; every WebKit cell in §3 remains *Untested*.
+
+## 8. WebKitGTK verification (2026-11-21, real engine)
+
+Environment: **WebKitGTK 2.54.3** via PyGObject/WebKit2, driven against the
+locally served wasm demo (`wasm-pack build --target web`), 1000×760 window,
+Linux/X11. This is a genuine WebKit engine, **not** Safari or iOS.
+
+Findings:
+
+- `navigator.gpu` is **undefined**; WebGL2 **is** available. User agent reports
+  `AppleWebKit/605.1.15 ... Safari/605.1.15`, confirming the `is_webkit_like`
+  heuristic also matches non-Apple WebKit builds.
+- The first run exposed a real bug: `GpuRenderer::forge_headless` panicked
+  ("Failed to find a suitable GPU for Surtr") because wgpu's GL backend has no
+  adapter, so the software fallback never ran and the canvas stayed blank.
+  **Fixed** by preflighting `navigator.gpu.requestAdapter()` before entering
+  the GPU path; unsupported engines now get a clean `Err` and fall back.
+- After the fix: console shows
+  `[web-render] WebGPU path failed, using software fallback: WebGPU unavailable`
+  followed by `[web-render] software frame blitted to canvas`. The canvas has
+  real pixels (`[12,15,22,255]` at 400,300), `dataLen` 5770.
+- The P1-3 DOM bridge works in WebKit: `data-cvkg-a11y-spike` container with
+  `heading` and `textbox` mirrored nodes is present.
+- The P1-5 input layer works: dispatching `Ctrl+K`, `a`, `b` produced the live
+  region announcement `insert ab`.
+
+Safari/macOS/iOS were **not** tested; no Apple browser is available on this
+host. The §3 matrix rows for Safari/iOS remain Untested.
