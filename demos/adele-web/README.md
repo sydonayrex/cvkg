@@ -47,8 +47,13 @@ wasm-pack build --target web
 
 Verified in Chromium 158: dispatching `focus`, `keydown` and `pointerdown`
 events updates the snapshot, and `Key ArrowDown` appears in the live region.
-This is an input-normalization layer only — no hit-testing tree, caret rendering
-or declarative shortcut bindings on the web path yet.
+Hit-testing and a single editable field are also implemented: pointer events
+are mapped against three fixed regions, `Ctrl+K` focuses the search field,
+`Escape` clears it and `Tab` advances the focused region; character keys,
+Backspace/Delete, arrows, Home/End edit a text buffer with a byte-index caret.
+Verified in Chromium: `Ctrl+K` → search, typing `ab` → caret 2, `ArrowLeft` →
+caret 1, inserting `X` → `axb`. The caret/text are not yet rendered on the
+canvas and the regions are a fixed table, not a geometry-aware tree.
 
 ## Accessibility / text bridge spike (P1-3)
 

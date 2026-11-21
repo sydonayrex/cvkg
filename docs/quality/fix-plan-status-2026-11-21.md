@@ -117,6 +117,14 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Web hit-testing/caret/shortcuts:** `web_input.rs` now maps pointer events
+  to three fixed canvas regions, maintains a text buffer with byte-index caret
+  and editing commands, and matches a declarative `KeyShortcut` table
+  (`Ctrl+K`, `Escape`, `Tab`). Fixed single-character case normalization in
+  `normalize_key_name` so authored `Ctrl+K` matches incoming `k`. Verified in
+  Chromium: `Ctrl+K` focuses search, typing `ab` yields caret 2, `ArrowLeft`
+  yields 1, inserting `X` yields `axb`. Caret is not yet visually rendered.
+
 - **Full-workspace wasm gate:** the five native-only crates (`cvkg-cli`,
   `cvkg-webkit-server`, `cvkg-render-native`, `cvkg-gallery`, `berserker`) now
   target-gate their dependencies and compile as no-op stubs on wasm. The CI

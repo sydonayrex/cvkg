@@ -167,6 +167,12 @@ pub fn normalize_key_name(name: &str) -> Option<String> {
         return Some(canonical.to_string());
     }
 
+    // Single-character keys are case-insensitive: a shortcut authored as
+    // "Ctrl+K" must match an incoming "k" and vice versa.
+    if trimmed.chars().count() == 1 && trimmed.chars().all(|c| c.is_ascii_alphabetic()) {
+        return Some(trimmed.to_ascii_lowercase());
+    }
+
     // Physical key codes carry a prefix around a single character.
     if let Some(rest) = trimmed
         .strip_prefix("Key")
