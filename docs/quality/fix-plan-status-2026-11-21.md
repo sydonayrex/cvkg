@@ -117,6 +117,13 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Niflheim layout pass (partial):** `Grid::render` now registers its bounds
+  with `push_vnode`/`pop_vnode` so locally-computed child rects are translated
+  into place (cards visibly move into their grid columns). Full parity is still
+  blocked by the remaining local/absolute contract gaps in ScrollView/VStack
+  and by color/tone-map drift versus the July golden; the test stays red and
+  the golden stays untouched.
+
 - **Visual test flakiness:** the two `cvkg-test` visual regression tests created
   separate GPU devices concurrently and the determinism check intermittently
   failed with >1% diff. Serialized them with a shared test-binary mutex; the

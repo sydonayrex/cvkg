@@ -57,7 +57,7 @@ impl View for Grid {
         unreachable!()
     }
 
-    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if self.children.is_empty() {
             return;
         }
@@ -84,6 +84,11 @@ impl View for Grid {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let rects = grid_engine.compute_layout_rects_local(&layouts, &placements, &mut cache);
 
+        // The grid engine returns child rects in the grid's LOCAL space.
+        // Register the grid's own bounds so GpuRenderer's translation stack
+        // places those children at the correct screen position (the nodal
+        // coordinate migration contract).
+        renderer.push_vnode(rect, "Grid");
         let mut rect_idx = 0;
         for child in &self.children {
             if child.layout().is_some() && rect_idx < rects.len() {
@@ -91,6 +96,7 @@ impl View for Grid {
                 rect_idx += 1;
             }
         }
+        renderer.pop_vnode();
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
