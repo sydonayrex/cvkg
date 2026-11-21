@@ -221,7 +221,11 @@ impl ViewModifier for FrameModifier {
 
         let child_proposal =
             self.transform_proposal(SizeProposal::new(Some(rect.width), Some(rect.height)));
-        let child_size = view.intrinsic_size(renderer, child_proposal);
+        // P2-2: apply the fixed/min/max constraints to the measured size.
+        // Without this `transform_size` was dead code and `.frame(w, h)` had
+        // no effect on the rect handed to the child, producing zero-size
+        // buttons in component-driven renders.
+        let child_size = self.transform_size(view.intrinsic_size(renderer, child_proposal));
 
         let mut child_x = rect.x;
         let mut child_y = rect.y;

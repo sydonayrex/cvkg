@@ -1260,6 +1260,7 @@ impl GpuRenderer {
             current_scene,
             background_pipeline: pipes.background_pipeline,
             current_z: 0.0,
+            translation_stack: Vec::new(),
             default_background_color: [0.02, 0.02, 0.05, 1.0],
             app_drew_background: false,
             frame_rendered: false,

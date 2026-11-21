@@ -216,6 +216,10 @@ pub struct GpuRenderer {
     pub(crate) current_theme: ColorTheme,
     pub(crate) current_scene: SceneUniforms,
     pub(crate) current_z: f32,
+    /// Cumulative renderer translation for local-coordinate components (P2-2).
+    /// `GpuRenderer` owns this stack so both native and direct-GPU rendering
+    /// apply `push_vnode`/`push_translation` offsets consistently.
+    pub(crate) translation_stack: Vec<glam::Vec2>,
 
     /// Default background color for the canvas (RGBA).
     /// Used when the app does not draw its own background.

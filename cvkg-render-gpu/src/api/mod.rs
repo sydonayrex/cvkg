@@ -1438,6 +1438,58 @@ impl cvkg_core::Renderer for GpuRenderer {
         self.current_z = z;
     }
 
+    // P2-2: own the cumulative translation for local-coordinate components.
+    // The native renderer delegates here, so native and direct-GPU rendering
+    // share one implementation of the push_vnode/push_translation contract.
+    fn push_vnode(&mut self, rect: Rect, _name: &'static str) {
+        let top = self
+            .translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO)
+            + glam::Vec2::new(rect.x, rect.y);
+        self.translation_stack.push(top);
+        cvkg_core::set_renderer_translation(top);
+    }
+
+    fn pop_vnode(&mut self) {
+        self.translation_stack.pop();
+        let top = self
+            .translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO);
+        cvkg_core::set_renderer_translation(top);
+    }
+
+    fn push_translation(&mut self, translation: glam::Vec2) {
+        let top = self
+            .translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO)
+            + translation;
+        self.translation_stack.push(top);
+        cvkg_core::set_renderer_translation(top);
+    }
+
+    fn pop_translation(&mut self) {
+        self.translation_stack.pop();
+        let top = self
+            .translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO);
+        cvkg_core::set_renderer_translation(top);
+    }
+
+    fn current_translation(&self) -> glam::Vec2 {
+        self.translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO)
+    }
+
     fn set_material(&mut self, material: cvkg_core::DrawMaterial) {
         self.current_draw_material = material;
     }

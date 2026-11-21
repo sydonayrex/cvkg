@@ -117,6 +117,12 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Frame/translation contract fixes:** `FrameModifier::render` was using the
+  child's raw intrinsic size, leaving `transform_size` dead code so
+  `.frame(w, h)` had no effect (zero-size buttons). It now applies the
+  configured constraints. `GpuRenderer` now owns the cumulative translation
+  stack for `push_vnode`/`push_translation` and sets the thread-local offset;
+  `NativeRenderer` delegates to it instead of maintaining a second stack.
 - **Known remaining red test:** `cvkg-test --test visual_regression::test_generate_niflheim_screenshot`
   reports 100% diff against its golden. Verified on a clean `HEAD` worktree with
   identical output, and pixel-compared the clean-HEAD render with the current
@@ -124,8 +130,10 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   is a blank background with only tiny top-left text while the golden shows the
   full Niflheim demo; this is a genuine pre-existing rendering regression
   (likely the nodal-coordinate migration). The golden was restored rather than
-  overwritten with the broken output; fixing the rendering is a separate task.
-  Do not accept a new golden until the demo renders again.
+  overwritten with the broken output. The two layout fixes above improve the
+  render (buttons now have their configured 160×30 size) but the golden also
+  predates the tone-mapping/color changes and deeper Grid/VStack placement
+  differences. Completing this needs a layout pass, not a golden update.
 - **Scene consistency fixtures fixed:** `cvkg-scene/tests/consistency_tests.rs`
   still expected `Text::render` to emit exactly one command; it now emits
   `PushVNode("Text")`, `DrawText`, `PopVNode` (companion attachment). Updated the
