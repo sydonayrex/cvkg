@@ -117,6 +117,13 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **P1-5 native call site:** `convert_keyboard_event` now routes winit physical
+  codes through `cvkg_core::normalize_key_name`, so `KeyA` → `a`, `Digit1` → `1`
+  and text-input keydown handlers receive the same logical names as the web
+  path. Extracted a pure `normalize_key_code` helper with unit tests; native
+  renderer lib suite → 24 passed. Web key-event call sites are still absent
+  (the web demo has no keyboard handling yet).
+
 - **Frame/translation contract fixes:** `FrameModifier::render` was using the
   child's raw intrinsic size, leaving `transform_size` dead code so
   `.frame(w, h)` had no effect (zero-size buttons). It now applies the

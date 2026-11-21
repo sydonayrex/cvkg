@@ -1,4 +1,13 @@
 use std::path::PathBuf;
+
+/// Normalise a winit physical-key debug string into the shared logical name.
+///
+/// Extracted from [`convert_keyboard_event`] so the platform boundary can be
+/// unit-tested without constructing a `winit::event::KeyEvent` (which has
+/// private platform-specific fields).
+pub(crate) fn normalize_key_code(raw: &str) -> String {
+    cvkg_core::normalize_key_name(raw).unwrap_or_else(|| raw.to_string())
+}
 use winit::event::{ElementState, Ime, KeyEvent};
 use winit::keyboard::{ModifiersState, PhysicalKey};
 
@@ -8,7 +17,10 @@ pub fn convert_keyboard_event(
     modifiers: &ModifiersState,
 ) -> Option<cvkg_core::Event> {
     if let PhysicalKey::Code(code) = event.physical_key {
-        let key_str = format!("{:?}", code);
+        // P1-5: canonicalise winit physical codes ("KeyA", "Digit1") into the
+        // same logical names web/key handlers use ("a", "1"). Components that
+        // insert typed characters expect single-character keys on both targets.
+        let key_str = normalize_key_code(&format!("{:?}", code));
         let cvkg_mods = cvkg_core::KeyModifiers {
             shift: modifiers.shift_key(),
             ctrl: modifiers.control_key(),
@@ -135,4 +147,21 @@ pub fn load_icon() -> Option<winit::window::Icon> {
         base
     );
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // P1-5: native physical codes must produce the same logical key names as
+    // web KeyboardEvent.key so shared shortcut handlers work on both targets.
+    #[test]
+    fn physical_codes_are_normalized_to_logical_keys() {
+        assert_eq!(normalize_key_code("KeyA"), "a");
+        assert_eq!(normalize_key_code("Digit1"), "1");
+        assert_eq!(normalize_key_code("ShiftLeft"), "ShiftLeft"); // bare modifiers stay raw
+        assert_eq!(normalize_key_code("Escape"), "Escape");
+        assert_eq!(normalize_key_code("Space"), "Space");
+        assert_eq!(normalize_key_code("CustomKey"), "CustomKey");
+    }
 }
