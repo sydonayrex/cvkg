@@ -1,3 +1,4 @@
+#![cfg(not(target_arch = "wasm32"))]
 //! # CVKG Agentic Development Guidelines (v1.3)
 //!
 //! All AI agents contributing to this crate MUST follow ALL eight rules:

@@ -34,7 +34,7 @@ publisher = "SydonayRex"
 name = "berserker"
 path = "src/main.rs"
 
-[dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 cvkg = { workspace = true, features = ["native"] }
 cvkg-core.workspace = true
 cvkg-vdom.workspace = true

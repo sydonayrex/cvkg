@@ -1,3 +1,4 @@
+#![cfg(not(target_arch = "wasm32"))]
 pub mod agent_replay;
 pub mod asset_pipeline;
 pub mod build_pipeline;

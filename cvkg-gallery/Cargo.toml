@@ -14,7 +14,7 @@ path = "src/main.rs"
 name = "cvkg_gallery"
 path = "src/lib.rs"
 
-[dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 cvkg = { workspace = true, features = ["native"] }
 cvkg-components = { workspace = true }
 cvkg-core = { workspace = true }
@@ -23,7 +23,7 @@ libc = "0.2"
 chrono = "0.4"
 urlencoding = "2.1"
 
-[dev-dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 cvkg-render-software = { workspace = true }
 cvkg-runic-text = { workspace = true }
 cvkg-vdom = { workspace = true }

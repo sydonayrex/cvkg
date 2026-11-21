@@ -45,57 +45,57 @@ path = "tests/niflheim_wasi_verification.rs"
 name = "security_tests"
 path = "tests/security_tests.rs"
 
-[dependencies.anyhow]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.anyhow]
 version = "1.0"
 
-[dependencies.arc-swap]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.arc-swap]
 version = "1.9"
 
-[dependencies.axum]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.axum]
 version = "0.8"
 features = ["ws"]
 
-[dependencies.bytes]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.bytes]
 version = "1.0"
 
-[dependencies.clap]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.clap]
 version = "4.6"
 features = [
     "derive",
     "env",
 ]
 
-[dependencies.cvkg-cli]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-cli]
 version = "0.3.4"
 
-[dependencies.dotenvy]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.dotenvy]
 version = "0.15.7"
 
-[dependencies.futures-util]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.futures-util]
 version = "0.3.32"
 
-[dependencies.http-body-util]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.http-body-util]
 version = "0.1"
 
-[dependencies.metrics]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.metrics]
 version = "0.24"
 
-[dependencies.metrics-exporter-prometheus]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.metrics-exporter-prometheus]
 version = "0.18"
 
-[dependencies.mime_guess]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.mime_guess]
 version = "2.0.5"
 
-[dependencies.serde]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.serde]
 version = "1.0"
 features = [
     "derive",
 ]
 
-[dependencies.serde_json]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.serde_json]
 version = "1.0"
 
-[dependencies.tokio]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tokio]
 version = "1.0"
 features = [
     "sync",
@@ -107,14 +107,14 @@ features = [
 ]
 default-features = false
 
-[dependencies.tower]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tower]
 version = "0.5"
 features = [
     "util",
     "limit",
 ]
 
-[dependencies.tower-http]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tower-http]
 version = "0.7"
 features = [
     "cors",
@@ -126,28 +126,28 @@ features = [
     "compression-full",
 ]
 
-[dependencies.tower_governor]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tower_governor]
 version = "0.8"
 
-[dependencies.tracing]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tracing]
 version = "0.1"
 
-[dependencies.tracing-subscriber]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tracing-subscriber]
 version = "0.3"
 features = ["env-filter"]
 
-[dependencies.validator]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.validator]
 version = "0.20.0"
 features = ["derive"]
 
-[dependencies.regex]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.regex]
 version = "1"
 
-[dependencies.rand]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.rand]
 version = "0.10.2"
 features = ["std", "sys_rng"]
 
-[dependencies.wasmtime]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wasmtime]
 version = "46"
 features = [
     "cranelift",
@@ -155,18 +155,18 @@ features = [
     "component-model",
 ]
 
-[dependencies.wasmtime-wasi]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wasmtime-wasi]
 version = "46"
 features = ["p1"]
 
-[dependencies.wry]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wry]
 version = "0.55.0"
 
-[dev-dependencies.reqwest]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.reqwest]
 version = "0.13"
 features = ["json"]
 
-[dev-dependencies.tokio]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.tokio]
 version = "1.0"
 features = [
     "sync",

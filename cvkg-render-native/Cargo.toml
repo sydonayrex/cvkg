@@ -29,10 +29,10 @@ resolver = "2"
 name = "cvkg_render_native"
 path = "src/lib.rs"
 
-[dependencies.accesskit]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.accesskit]
 version = "0.24"
 
-[dependencies.accesskit_winit]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.accesskit_winit]
 version = "0.33"
 
 [target.'cfg(target_os = "linux")'.dependencies.accesskit_unix]
@@ -40,54 +40,54 @@ version = "0.21"
 default-features = false
 features = ["tokio"]
 
-[dependencies.arc-swap]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.arc-swap]
 version = "1.9"
 
-[dependencies.arboard]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.arboard]
 version = "3.6"
 
-[dependencies.cvkg-core]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-core]
 version = "0.3.4"
 
-[dependencies.cvkg-materials]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-materials]
 workspace = true
 
-[dependencies.cvkg-render-gpu]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-render-gpu]
 version = "0.3.4"
 
-[dependencies.cvkg-vdom]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-vdom]
 version = "0.3.4"
 
-[dependencies.cvkg-themes]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-themes]
 version = "0.3.4"
 
-[dependencies.cvkg-telemetry]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.cvkg-telemetry]
 version = "0.3.4"
 
-[dependencies.tracing]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tracing]
 version = "0.1"
 
-[dependencies.image]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.image]
 version = "0.25"
 features = ["jpeg"]
 
-[dependencies.libc]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.libc]
 version = "0.2"
 
-[dependencies.env_logger]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.env_logger]
 version = "0.11"
 
-[dependencies.log]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.log]
 version = "0.4"
 
-[dependencies.pollster]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.pollster]
 version = "0.4.0"
 
-[dependencies.runic-text]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.runic-text]
 version = "0.3.5"
 package = "cvkg-runic-text"
 
-[dependencies.tokio]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.tokio]
 version = "1.0"
 features = [
     "sync",
@@ -97,12 +97,12 @@ features = [
 ]
 default-features = false
 
-[dependencies.winit]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.winit]
 version = "0.30"
 
-[dependencies.rodio]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.rodio]
 version = "0.22"
 
-[dependencies.glam]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.glam]
 workspace = true
 

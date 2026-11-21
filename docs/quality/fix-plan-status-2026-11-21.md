@@ -117,6 +117,12 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Full-workspace wasm gate:** the five native-only crates (`cvkg-cli`,
+  `cvkg-webkit-server`, `cvkg-render-native`, `cvkg-gallery`, `berserker`) now
+  target-gate their dependencies and compile as no-op stubs on wasm. The CI
+  `wasm-build` job now runs `cargo check --workspace --target wasm32-unknown-unknown`
+  with no exclusions. Native builds and tests are unchanged.
+
 - **Docs accuracy:** `docs/components/Button.md` no longer names a
   non-existent `BifrostButton` as the canonical type; parity scorecard updated.
 

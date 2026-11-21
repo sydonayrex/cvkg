@@ -73,7 +73,7 @@ Wiring is additive in `demos/adele-web/src/lib.rs`; the existing renderer path i
 | Gap | Status / evidence |
 |---|---|
 | WebGPU adapter-level verification | `capability_probe` checks API presence only; no `requestAdapter()` in the shipped probe. |
-| Full-demo wasm build | Previously blocked by `Send + Sync` errors in `cvkg-render-gpu`/`render-3d`/`export-raster`/`inputs`; being worked separately. |
+| Full-workspace wasm build | Now passes: all native-only crates compile as wasm stubs with target-gated dependencies. Native apps are not functional in a browser. |
 | DOM ARIA mirror in shipped demo | `demos/adele-web/src/a11y_bridge.rs` is a P1-3 spike, not called from `index.html`. |
 | IME, selection, clipboard, touch parity | Prototype in `a11y_bridge.rs`; not production-wired (`arboard` is non-wasm). |
 | Runtime shader tier selection | `RecommendedTier` exists; no consumer selects a shader/renderer path. |

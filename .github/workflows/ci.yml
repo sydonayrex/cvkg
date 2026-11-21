@@ -92,15 +92,13 @@ jobs:
     - name: Validate every composed shader variant with naga
       run: cargo test -p cvkg-render-gpu --lib shader_composition
 
-  # P2-5: wasm32 compile gate for 38 of 43 workspace members. The five excluded
-  # members are unconditionally native (fn main(), winit, axum/mio servers) and
-  # would need a large cfg/stub refactor before they can compile for wasm:
-  #   cvkg-cli, cvkg-webkit-server (tokio net/full -> mio)
-  #   cvkg-render-native, cvkg-gallery, berserker (tokio rt-multi-thread)
-  # Everything else, including the GPU renderer, is checked. Verified locally with
-  # and without .cargo/config.toml. No aspirational claims about excluded crates.
+  # P2-5: full wasm32 compile gate. Native-only crates (cli, webkit-server,
+  # render-native, gallery, berserker) compile as empty stubs on wasm: their
+  # dependencies are target-gated and their entry points dispatch to a no-op
+  # wasm main. This proves the whole workspace is wasm-checkable, NOT that those
+  # native apps are functional in a browser.
   wasm-build:
-    name: wasm32 build (native-only members excluded)
+    name: wasm32 build (full workspace)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -120,14 +118,8 @@ jobs:
         key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-wasm-
 
-    - name: cargo check (workspace minus native-only members)
-      run: |
-        cargo check --workspace --target wasm32-unknown-unknown \
-          --exclude cvkg-cli \
-          --exclude cvkg-webkit-server \
-          --exclude cvkg-render-native \
-          --exclude cvkg-gallery \
-          --exclude berserker
+    - name: cargo check (full workspace)
+      run: cargo check --workspace --target wasm32-unknown-unknown
 
   # P2-5: native desktop smoke gate. Installs the same Linux system deps as the main
   # ci job, builds a representative native binary (cvkg-gallery), and runs the
