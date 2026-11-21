@@ -126,3 +126,11 @@ cargo test -p cvkg-components --tests
 A dynamic follow-up (browser/native focus injection, screen-reader tree dump,
 reduced-motion and high-contrast checks) is required before any rating in this
 document is upgraded from static to runtime-verified.
+
+## Update 2026-11-21 — RadioGroup
+
+`RadioGroup` now publishes `role=radiogroup` plus the selected option's label
+as `value` and the option description as ARIA description
+(`cvkg-components/src/radio_group.rs`, `aria_tests::radio_group_publishes_role_and_selected_value`).
+Per-item `radio` roles are still emitted through the existing `set_aria_role`
+path in `render`, not through the accessibility tree type.

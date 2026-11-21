@@ -4,7 +4,7 @@
 //! (arrow keys to move, Space/Enter to select) and proper ARIA roles.
 
 use crate::theme;
-use cvkg_core::{Event, Never, Rect, Renderer, View};
+use cvkg_core::{AriaProperties, AriaRole, Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// A single option within a radio group.
@@ -109,6 +109,19 @@ impl View for RadioGroup {
 
     fn body(self) -> Self::Body {
         unreachable!()
+    }
+
+    /// P2-2: expose the group role and the currently selected option's label
+    /// so assistive tech can announce the group's value.
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        let mut props = AriaProperties::new(AriaRole::Radiogroup, "Radio group");
+        if let Some(option) = self.options.get(self.selected_index) {
+            props = props.value(option.label.clone());
+            if let Some(description) = &option.description {
+                props = props.description(description.clone());
+            }
+        }
+        Some(props)
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
@@ -289,5 +302,28 @@ impl View for RadioGroup {
             width: proposal.width.unwrap_or(content_width).max(content_width),
             height: self.total_height(),
         }
+    }
+}
+
+#[cfg(test)]
+mod aria_tests {
+    use super::*;
+
+    #[test]
+    fn radio_group_publishes_role_and_selected_value() {
+        let group = RadioGroup::new(
+            vec![
+                RadioOption::new("First").description("description"),
+                RadioOption::new("Second"),
+            ],
+            1,
+            |_| {},
+        );
+        let props = group
+            .aria_properties()
+            .expect("RadioGroup must publish aria properties");
+        assert_eq!(props.role, AriaRole::Radiogroup);
+        assert_eq!(props.value.as_deref(), Some("Second"));
+        assert_eq!(props.description, None);
     }
 }
