@@ -1,6 +1,6 @@
 # Button
 
-`cvkg_components::Button` (English alias; canonical type `BifrostButton`)
+`cvkg_components::Button` (canonical type, defined at `cvkg-components/src/interactive/button.rs:17`)
 
 ## Import
 

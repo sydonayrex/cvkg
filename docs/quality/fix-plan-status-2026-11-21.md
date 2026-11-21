@@ -117,6 +117,9 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Docs accuracy:** `docs/components/Button.md` no longer names a
+  non-existent `BifrostButton` as the canonical type; parity scorecard updated.
+
 - **P2-2 ToggleGroup ARIA:** publishes toolbar role, selected-item value,
   disabled state and single/multi description; unit test added.
 
