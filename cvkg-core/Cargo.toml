@@ -139,6 +139,10 @@ path = "tests/erased_view_companion_tests.rs"
 name = "renderer_companion_tests"
 path = "tests/renderer_companion_tests.rs"
 
+[[test]]
+name = "input_parity"
+path = "tests/input_parity.rs"
+
 [dev-dependencies]
 proptest = { workspace = true }
 

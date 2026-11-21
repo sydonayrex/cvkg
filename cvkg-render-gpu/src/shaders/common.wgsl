@@ -311,9 +311,12 @@ fn sd_round_rect(p: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
 }
 
 fn sd_squircle(p: vec2<f32>, b: vec2<f32>, n: f32) -> f32 {
-    let d = abs(p) / b;
+    // P1-2: guard the box half-extents and the exponent denominator.
+    let ap = abs(p);
+    let d = vec2<f32>(safe_div_f32(ap.x, b.x, 0.0), safe_div_f32(ap.y, b.y, 0.0));
     let q = pow(d.x, n) + pow(d.y, n);
-    return (pow(q, 1.0 / n) - 1.0) * min(b.x, b.y);
+    let inv_n = safe_div_f32(1.0, n, 1.0);
+    return (pow(q, inv_n) - 1.0) * min(b.x, b.y);
 }
 
 fn sd_triangle(p: vec2<f32>, r: f32) -> f32 {
@@ -331,7 +334,8 @@ fn sd_triangle(p: vec2<f32>, r: f32) -> f32 {
 fn sd_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
     let pa = p - a;
     let ba = b - a;
-    let h  = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    // P1-2: a zero-length segment used to produce 0/0 -> NaN.
+    let h = clamp(safe_div_f32(dot(pa, ba), dot(ba, ba), 0.0), 0.0, 1.0);
     return length(pa - ba * h);
 }
 
@@ -362,13 +366,14 @@ fn fbm(p: vec2<f32>) -> f32 {
 }
 
 fn smin(a: f32, b: f32, k: f32) -> f32 {
-    let h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    let h = clamp(0.5 + 0.5 * safe_div_f32(b - a, k, 0.0), 0.0, 1.0);
     return mix(b, a, h) - k * h * (1.0 - h);
 }
 
 fn neon_glow(dist: f32, width: f32, bloom: f32) -> f32 {
     let core  = smoothstep(width, 0.0, dist);
-    let glow  = exp(-dist * dist / (bloom * bloom));
+    // P1-2: keep the bloom=0 case dark instead of producing NaN.
+    let glow = exp(-dist * dist * safe_div_f32(1.0, bloom * bloom, 1.0e6));
     return core + glow * 0.6;
 }
 
@@ -472,15 +477,22 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> f32 {
     var t = 0.0;
     for (var i = 0; i < 16; i++) {
         let d = scene_sdf(ro + rd * t);
+        if (!is_finite_f32(d)) { break; }
         if d < 0.001 { return t; }
         if t > 20.0  { break; }
-        t += d;
+        // P1-2: a negative/zero SDF step must not stall the loop.
+        t += max(d, 0.001);
     }
     return -1.0;
 }
 fn calc_normal(p: vec3<f32>) -> vec3<f32> {
     let e = vec2<f32>(0.001, 0.0);
-    return normalize(vec3<f32>(scene_sdf(p + e.xyy) - scene_sdf(p - e.xyy), scene_sdf(p + e.yxy) - scene_sdf(p - e.yxy), scene_sdf(p + e.yyx) - scene_sdf(p - e.yyx)));
+    // P1-2: a zero gradient (e.g. a flat SDF region) must not yield NaN.
+    return safe_normalize_vec3(vec3<f32>(
+        scene_sdf(p + e.xyy) - scene_sdf(p - e.xyy),
+        scene_sdf(p + e.yxy) - scene_sdf(p - e.yxy),
+        scene_sdf(p + e.yyx) - scene_sdf(p - e.yyx)
+    ), vec3<f32>(0.0, 0.0, 1.0));
 }
 
 // ─── Color Space Conversion ─────────────────────────────────────────────────

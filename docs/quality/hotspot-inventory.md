@@ -1,5 +1,11 @@
 # Panic / Unsafe Hotspot Inventory (P0-1 / P0-2)
 
+Follow-up (2026-11-21): a fresh grep for `TODO|FIXME|XXX` in non-test
+`cvkg-*/src` and `demos/*/src` found exactly one remaining hit —
+`cvkg-gallery/src/state.rs:201` (`persisted_sidebar_width = 240.0`), which is
+demo-only and intentionally left behind a dev boundary. All production TODOs
+are closed.
+
 Audit date: 2026-11-21. Scope: `cvkg-gallery/src/`, `cvkg-scene/src/`,
 `cvkg-render-gpu/src/renderer/` (draw, init, mod, frame, context_helpers, geometry,
 pipelines, svg, capability), `cvkg-render-native/src/`, `cvkg-anim/src/`,

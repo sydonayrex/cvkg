@@ -93,6 +93,15 @@ CI runs both as the `shader-validation` job in `.github/workflows/ci.yml`.
   (see `docs/platform/webkit-compatibility.md`).
 - No golden SPIR-V/MSL/DXIL outputs are stored or diffed.
 
+## 4.1 Numeric hardening (P1-2)
+
+The composed preambles define `is_finite_f32`, `safe_div_f32`,
+`safe_normalize_vec2` and `safe_normalize_vec3`. The PBR and glass shaders, the
+SDF helpers and both raymarch loops use them. A structural test
+(`composed_variants_include_numeric_guards`) fails if any guard disappears from
+a composed variant. See `docs/quality/numeric-rigor.md` for the policy and the
+CPU-side pilots.
+
 ## 5. SPIR-V and backend support statement (P0-4)
 
 - WGSL is the only shader source language in this repository.

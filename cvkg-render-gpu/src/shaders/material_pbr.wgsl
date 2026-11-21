@@ -168,7 +168,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         if scene.ibl_enabled != 0u {
             let reflect_ws  = reflect(-view_dir, n);
             let reflect_cs  = scene.proj * scene.view * vec4<f32>(in.world_pos_3d + reflect_ws, 1.0);
-            let screen_uv   = reflect_cs.xy / reflect_cs.w * 0.5 + 0.5;
+            // P1-2: guard the homogeneous divide.
+            let inv_w = safe_div_f32(1.0, reflect_cs.w, 0.0);
+            let screen_uv = reflect_cs.xy * inv_w * 0.5 + 0.5;
             let ibl_mip     = roughness * 4.0;
             let ibl_sample  = textureSampleLevel(t_ibl, s_ibl, screen_uv, ibl_mip);
             lit_color      += ibl_sample.rgb * fresnel * (1.0 - roughness);
@@ -211,19 +213,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         for (var i = 0; i < 40; i++) {
             let p = m * (ro + rd * t);
             d = sd_box_3d(p, vec3(0.5, 0.5, 0.5));
+            // P1-2: keep the march progressing even for negative steps.
             if d < 0.001 { hit = true; break; }
-            t += d;
+            t += max(d, 0.001);
             if t > 5.0 { break; }
         }
 
         if hit {
             let p = m * (ro + rd * t);
             let eps = vec2(0.001, 0.0);
-            let n = normalize(vec3(
+            let n = safe_normalize_vec3(vec3<f32>(
                 sd_box_3d(p + eps.xyy, vec3(0.5)) - sd_box_3d(p - eps.xyy, vec3(0.5)),
                 sd_box_3d(p + eps.yxy, vec3(0.5)) - sd_box_3d(p - eps.yxy, vec3(0.5)),
                 sd_box_3d(p + eps.yyx, vec3(0.5)) - sd_box_3d(p - eps.yyx, vec3(0.5))
-            ));
+            ), vec3<f32>(0.0, 0.0, 1.0));
             let light_dir = normalize(vec3(1.0, 1.0, -2.0));
             let diff = max(dot(n, light_dir), 0.1);
             let rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0) * 0.5;

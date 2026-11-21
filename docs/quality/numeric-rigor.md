@@ -96,16 +96,19 @@ Schlick-GGX denominator, irradiance-volume spacing, shadow homogeneous divide,
 shadow texel size, and all PBR normal/light/view/half-vector normalizations.
 All composed native and wasm variants still pass naga validation.
 
-**Still outstanding for P1-2** (static review, not yet migrated):
+Second migration pass (P1-2 continuation):
 
-- `material_glass.wgsl` — normalization/inverse of degenerate vectors and the
-  refraction/distortion terms.
-- `material_pbr.wgsl` raymarch/SDF loops — step counts and distance divisors.
-- `common.wgsl` — remaining `1.0 / dist`-style expressions in shatter/glow
-  effects.
+- `material_glass.wgsl` — Snell IOR divide, clamped sqrt radicand, GGX NDF and
+  Smith denominators, and screen-space normalizations.
+- `common.wgsl` — SDF box/extent divides, squircle exponent, segment parameter,
+  smooth-min denominator, bloom denominator, raymarch step monotonicity and
+  gradient normalization.
+- `material_pbr.wgsl` — reflection homogeneous divide, mode-21 march step
+  monotonicity, cube gradient normalization.
 
-Note that shader validation proves structure and types only; it does not prove
-numeric stability on real GPU backends.
+All composed native and wasm variants continue to pass naga validation after
+each change. Note that this proves structure and types only; it does not prove
+numeric stability on real GPU backends, and no visual snapshot tests exist yet.
 
 ## 6. Verification
 

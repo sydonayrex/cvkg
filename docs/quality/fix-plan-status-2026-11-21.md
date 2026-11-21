@@ -82,8 +82,39 @@ python3 scripts/validate_shaders.py --check PASS
 python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  PASS
 ```
 
+## 5d. Component/token parity docs
+
+- **P2-1:** `docs/quality/component-parity.md` — 8-dimension rubric, two
+  scorecard tables covering all seven priority families with file:line
+  evidence, prioritized gaps and fix order. Top gaps: `View::on_key_event` has
+  no call site; ARIA state (`invalid`, `selected`, `expanded`) is shallow;
+  menus/tables publish no semantic role.
+- **P2-3:** `docs/quality/token-consolidation.md` — token source map, 10
+  duplication/drift findings, a labelled single-semantic-token proposal and an
+  API-preserving four-phase migration. Flags disagreement on
+  `body=16/17`, `space md=12/16`, `radius md=6/8`.
+- Both are static audits; no runtime/browser verification.
+
+## 5c. Continuation after first push
+
+- **P1-5 (focused slice):** `cvkg-core/src/keyboard.rs` gains a pure, additive
+  shortcut foundation (`ShortcutPlatform`, `normalize_key_name`,
+  `KeyModifiers::{is_empty,count,primary,from_pressed_keys}`,
+  `KeyShortcut::{parse,matches,matches_on}` + `FromStr`) so native physical
+  codes and web logical keys can share one representation. Registered a new
+  integration test target in `cvkg-core/Cargo.toml`
+  (`tests/input_parity.rs`, 4 tests). `cargo test -p cvkg-core --lib` → 162
+  passed; `--test input_parity` → 4 passed. Call sites in native/web are not
+  migrated yet; clipboard/text-input/focus parity remains open.
+
 ## 5b. Final adjustments (user request)
 
+- **P1-2 completed** in a follow-up pass: hardened the remaining `common.wgsl`
+  divisions (SDF extents, squircle exponent, segment parameter, smooth-min,
+  bloom), raymarch step monotonicity and gradient normalization, plus the
+  PBR reflection homogeneous divide. A structural test pins the numeric guard
+  helpers in every composed variant. `cargo test -p cvkg-render-gpu --lib` →
+  180 passed.
 - `.github/workflows/ci.yml` triggers switched to **manual only** (`workflow_dispatch`);
   `push`/`pull_request` triggers removed. `docs/ci-plan.md` updated to match.
 - Two pre-existing test-compile failures that made `cargo test --workspace` red

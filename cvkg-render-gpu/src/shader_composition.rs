@@ -219,6 +219,37 @@ mod tests {
         }
     }
 
+    // P1-2: pin the shared numeric guards in the composed output. Naga
+    // validation alone would not notice a regression that deletes a guard
+    // function while leaving its (now unresolved) call sites out too.
+    #[test]
+    fn composed_variants_include_numeric_guards() {
+        for set in [native_shader_set(), wasm_shader_set()] {
+            let generated = generated_materials_for(&set);
+            for variant in compose(&set, &generated) {
+                for guard in [
+                    "fn is_finite_f32",
+                    "fn safe_div_f32",
+                    "fn safe_normalize_vec3",
+                    "fn safe_normalize_vec2",
+                ] {
+                    assert!(
+                        variant.source.contains(guard),
+                        "{}:{} is missing numeric guard {guard}",
+                        set.name,
+                        variant.name
+                    );
+                }
+                assert!(
+                    !variant.source.contains("isFinite("),
+                    "{}:{} uses isFinite, which naga 29 does not support",
+                    set.name,
+                    variant.name
+                );
+            }
+        }
+    }
+
     #[test]
     fn native_and_wasm_sets_use_expected_texture_declarations() {
         assert!(
