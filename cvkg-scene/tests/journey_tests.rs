@@ -95,7 +95,7 @@ fn journey_layout_reflow_on_content_change() {
     let text_node1 = vdom1
         .nodes
         .values()
-        .find(|n| n.component_type.contains("Text"))
+        .find(|n| n.component_type == "Primitive::Text")
         .expect("Text node not found");
     let initial_width = text_node1.layout.width;
 
@@ -106,7 +106,7 @@ fn journey_layout_reflow_on_content_change() {
     let text_node2 = vdom2
         .nodes
         .values()
-        .find(|n| n.component_type.contains("Text"))
+        .find(|n| n.component_type == "Primitive::Text")
         .expect("Text node not found");
     let updated_width = text_node2.layout.width;
 

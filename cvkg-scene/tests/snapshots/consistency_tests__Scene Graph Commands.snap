@@ -22,6 +22,17 @@ expression: commands_json
     }
   },
   {
+    "PushVNode": {
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 100.0
+      },
+      "name": "Text"
+    }
+  },
+  {
     "DrawText": {
       "text": "Overlay",
       "x": 0.0,
@@ -35,5 +46,6 @@ expression: commands_json
       ]
     }
   },
+  "PopVNode",
   "EndFrame"
 ]

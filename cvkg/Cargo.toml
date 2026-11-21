@@ -122,7 +122,9 @@ version = "0.8"
 [dev-dependencies.pollster]
 version = "0.4.0"
 
-[dev-dependencies.tokio]
+# tokio's "full" feature pulls in mio, which cannot compile on wasm32-unknown-unknown.
+# Only native examples/tests need it; gate it off wasm so the full workspace checks cleanly.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.tokio]
 version = "1.0"
 features = ["full"]
 

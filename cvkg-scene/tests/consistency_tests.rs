@@ -11,17 +11,29 @@ fn test_primitive_consistency() {
 
     text.render(&mut renderer, rect);
 
-    assert_eq!(renderer.commands.len(), 1);
+    // Text::render pushes a dedicated VNode so companions/3D world-space
+    // attach to the text node; the single DrawText is bracketed by
+    // PushVNode/PopVNode. Assert the full three-command contract instead of
+    // the outdated "exactly one command" expectation.
+    assert_eq!(renderer.commands.len(), 3, "{:#?}", renderer.commands);
+    assert!(
+        matches!(renderer.commands.first(), Some(Command::PushVNode { name, .. }) if name == "Text"),
+        "expected leading PushVNode(Text)"
+    );
+    assert!(
+        matches!(renderer.commands.last(), Some(Command::PopVNode)),
+        "expected trailing PopVNode"
+    );
     if let Command::DrawText {
         text, x, y, size, ..
-    } = &renderer.commands[0]
+    } = &renderer.commands[1]
     {
         assert_eq!(text, "Consistency Test");
         assert_eq!(*x, 10.0);
         assert_eq!(*y, 20.0);
         assert_eq!(*size, 14.0);
     } else {
-        panic!("Expected DrawText command, got {:?}", renderer.commands[0]);
+        panic!("Expected DrawText command, got {:?}", renderer.commands[1]);
     }
 
     // Test Shape rendering

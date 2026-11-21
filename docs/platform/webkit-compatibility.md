@@ -1,117 +1,116 @@
 # WebKit / Safari Compatibility — Current State and Gaps
 
-**Status:** Addresses fix-plan task **P1-4** (WebKit/Safari compatibility matrix & fallback UX). Adjacent gaps from **P1-3** (web interaction baseline) and **P1-5** (input/UX parity) are flagged but not resolved here. **Date:** 2026-11-21.
+**Status:** addresses fix-plan task **P1-4** (WebKit/Safari compatibility matrix & fallback UX). Documents the runtime capability probe and fallback implemented for that task, plus what remains unverified. **Date:** 2026-11-21.
 
-**Evidence basis:** static review of the files cited below. **No browser, device, or WebKit interoperability testing was performed.** Nothing in this document should be read as a tested compatibility claim. Items marked *Planned*, *Gap*, or *Not yet implemented* do not work today.
+**Evidence basis:** static review of cited files plus **one real-browser run** on Chromium 158 / Linux / NVIDIA RTX 4070 (see §7). **No Safari, WebKitGTK, or iOS device run was performed.** Nothing in this document should be read as a tested WebKit compatibility claim. Items marked *Gap*, *Untested*, or *Not yet implemented* do not work today.
 
 ---
 
 ## 1. Terminology: `cvkg-webkit-server` is not a WebKit engine
 
-The name `cvkg-webkit-server` is misleading for this topic. It is an **axum HTTP/WebSocket/WASM development host**, not a WebKit engine, webview, or browser integration layer:
+The name `cvkg-webkit-server` is misleading for this topic. It is an **axum HTTP/WebSocket/WASM development host**, not a WebKit engine, webview, or browser integration layer (`cvkg-webkit-server/README.md`, router/`main`). WebKit/Safari compatibility concerns the browser that loads the WASM demo, not this crate.
 
-- `cvkg-webkit-server/README.md:5` — "axum-based HTTP and WebSocket server … hot-module-reload … static file serving, WASM execution through Wasmtime, and a Prometheus metrics endpoint."
-- `cvkg-webkit-server/README.md:9-13` — owns HTTP/routing/WS; explicitly states "Client-side rendering is not in scope".
-- `cvkg-webkit-server/README.md:124` — `wgpu` was removed in 0.2.15; only the `backend-wasm` feature remains (`:132`).
-- `cvkg-webkit-server/src/router.rs:265-267`, `:499` — serves `/pkg`, `/assets`, `/static`; handshake clients identify as `"webkit-runtime"` / `"webkit-hmr"`.
-
-There is **no** WebKit/WKWebView integration, no Safari-specific code, and no browser-capability negotiation in this repository. Audit §4.5 rates this naming confusion as a Medium finding.
-
-## 2. What CVKG actually detects at runtime today
-
-Three distinct mechanisms exist. Only one is runtime, and none of them is browser-level WebKit capability detection.
+## 2. What CVKG detects at runtime today
 
 ### 2.1 Compile-time shader variant selection — **NOT runtime detection**
 
-`cvkg-render-gpu/src/lib.rs:124-156` selects different WGSL includes via `#[cfg(target_arch = "wasm32")]`:
+`cvkg-render-gpu/src/lib.rs:124-156` selects `common_wasm.wgsl`, `material_opaque_wasm.wgsl` and `bloom_wasm.wgsl` with `#[cfg(target_arch = "wasm32")]`. These variants use a single `t_diffuse` texture because WebGL2 cannot declare 32-element binding arrays. The choice is made at compile time for the whole wasm target; it does not observe the actual browser capabilities.
 
-| Constant | `wasm32` | native |
-|---|---|---|
-| `WGSL_COMMON` | `shaders/common_wasm.wgsl` | `shaders/common.wgsl` |
-| `WGSL_MATERIAL_OPAQUE` | `shaders/material_opaque_wasm.wgsl` | `shaders/material_opaque.wgsl` |
-| `WGSL_BLOOM` | `shaders/bloom_wasm.wgsl` | `shaders/bloom.wgsl` |
+### 2.2 Runtime GPU adapter capability detection (exists, but is not browser detection)
 
-The comment at `lib.rs:124-130` explains the reason: "on wasm32/WebGL2, texture binding arrays are not supported" and the bind group layout therefore uses `count: None` on WASM. Other shaders (`shapes`, `material_glass`, `bifrost`, `color_blind`, `tonemap`, `particles`) are shared.
-
-**Important caveats:**
-- This is decided **at compile time by target architecture**, not at runtime by querying the browser or GPU. A `wasm32` binary built for WebGPU gets the same reduced variants as one running on WebGL2.
-- The comment conflates `wasm32` with WebGL2; `wasm32-unknown-unknown` can also target WebGPU. No code distinguishes the two.
-- Feature flags in `cvkg-render-gpu/Cargo.toml:130-132` are `wgpu 29` with `["spirv", "webgl", "fragile-send-sync-non-atomic-wasm"]`; `naga 29` has `["wgsl-in", "spv-out"]` (`:111-116`). Declared features are not evidence of an in-repo SPIR-V pipeline (audit §4.3).
-
-### 2.2 Runtime **GPU adapter** capability detection (exists, but is not browser detection)
-
-- `cvkg-render-gpu/src/renderer/capability.rs:29-120` — `GpuCapabilityTier::detect(adapter)` reads `adapter.get_info()` and `adapter.limits()`, derives a "reduced" vs "full" tier from device type and `max_storage_buffer_binding_size`, and intersects `required_limits` with adapter limits to avoid `request_device` panics.
-- `cvkg-render-gpu/src/renderer/init.rs:90-125` — tries HighPerformance, then LowPower, then a software fallback adapter (`force_fallback_adapter: true`).
 - `cvkg-render-gpu/src/renderer/init.rs:141-142` — probes `TIMESTAMP_QUERY` and `PIPELINE_CACHE` features.
-- `cvkg-render-gpu/src/renderer/init.rs:143-155` — on native requests `SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING | TEXTURE_BINDING_ARRAY`; on `wasm32` requests `wgpu::Features::empty()` with the comment "Fallbacks for WebGL".
+- `cvkg-render-gpu/src/renderer/init.rs:143-155` — native requests array-indexing features; wasm requests `wgpu::Features::empty()`.
 - `cvkg-render-gpu/src/subsystems/gpu_capabilities.rs:47` — vendor detection from `Adapter::get_info().name`.
 
-This detects **GPU hardware/driver limits**, not whether Safari exposes `navigator.gpu`, whether WebGL2 is available, or which WebKit version is running.
+This detects **GPU hardware/driver limits**, not whether a browser exposes WebGPU or which WebKit version is running.
 
-### 2.3 Browser-level capability detection — **Gap / Not yet implemented**
+### 2.3 Browser-level capability detection — **IMPLEMENTED (P1-4)**
 
-Repository-wide search found **no** use of `navigator.gpu`, `getContext("webgl2")`, user-agent/Safari detection, `matchMedia`, or any browser feature probe in Rust or JS/HTML sources. The only user-facing failure handling in the web demo is a `try/catch` around `init()` in `demos/adele-web/index.html:52-65` that changes a status `<div>` text to "Initialization Failed" in red. That is an error message, not capability detection or a fallback renderer.
+`demos/adele-web/src/capability_probe.rs` now probes, on wasm32:
 
-`demos/adele-web/src/lib.rs:20-25` (`main()`) only installs a panic hook and logger.
+- `navigator.gpu` presence via `js_sys::Reflect` (no unstable web-sys GPU bindings);
+- WebGL2 context creation on a **throwaway** canvas, so the demo's own canvas is untouched;
+- a user-agent heuristic for WebKit/Safari-like agents (`is_webkit_like`).
 
-## 3. Compatibility matrix — **PROPOSED, UNVERIFIED**
+Results are a plain-data `BrowserCapabilities { webgpu, webgl2, is_webkit_like }` with `is_supported()`, `recommended_tier()` and `fallback_reason()` helpers. A non-wasm stub keeps host `cargo check` working. `demos/adele-web/src/lib.rs` calls the probe at startup and logs the result.
 
-There is no tested matrix in-tree. The table below is a **template for the P1-4 acceptance criteria**, not a support statement. Every cell is untested.
+**Important limitation:** `navigator.gpu` presence is API presence only. The probe does **not** call `requestAdapter()`, so `webgpu: true` does not prove a usable GPU adapter. This is documented in the module and in the demo README.
 
-| Safari / WebKit | WebGPU | WASM (`wasm32-unknown-unknown`) | WebGL2 fallback | CVKG status |
-|---|---|---|---|---|
-| Safari 26+ (current) | Untested | Untested | Untested | **Untested** |
-| Safari 18 | Untested (WebGPU availability varies by release/OS) | Untested | Untested | **Untested** |
-| Safari 17 | Untested | Untested | Untested | **Untested** |
-| Safari 16 and older | Untested / likely unavailable | Untested | Untested | **Untested** |
-| iOS Safari (any) | Untested | Untested | Untested | **Untested** |
+## 3. Compatibility matrix
 
-A `RenderTier` enum exists in `cvkg-core/src/render_tier.rs:4-11` (`Tier1GPU` WebGPU/Vulkan/Metal/DX12, `Tier2GPU` WebGL2/OpenGL 3.3, `Tier3Fallback` Canvas 2D/GDI+). It is a **type definition**; no code in the reviewed files selects a tier from browser capabilities. Do not treat it as implemented tiering.
+| Browser / engine | WebGPU | WebGL2 | WASM | CVKG runtime detection | CVKG rendering verified |
+|---|---|---|---|---|---|
+| Chromium 158 (Linux, RTX 4070) | API present; adapter created in probe harness | Yes | Yes | **Verified** (§7) | **No render path** — wasm demo builds and loads, but `main()` starts no frame loop (blank canvas) |
+| Safari 26+ (macOS) | Untested | Untested | Untested | Code compiles for wasm; untested in Safari | **Untested** |
+| Safari 18 / 17 | Untested | Untested | Untested | Untested | **Untested** |
+| Safari 16 and older | Untested / likely unavailable | Untested | Untested | Untested | **Untested** |
+| iOS Safari | Untested | Untested | Untested | Untested | **Untested** |
+| WebKitGTK | Untested | Untested | Untested | Untested | **Untested** |
 
-### iOS Safari considerations (all risks, not verified behaviour)
+`cvkg-core/src/render_tier.rs:4-11` defines `Tier1GPU`/`Tier2GPU`/`Tier3Fallback`; the capability probe returns a `RecommendedTier` but **no renderer path is selected from it yet**. Do not treat tier selection as implemented.
 
-- No touch/pen/gesture normalization is demonstrated in the web demo; audit §4.5 rates this Medium.
-- `demos/adele-web/index.html:19-27` hardcodes a 1024×768 container with `overflow: hidden` on `body` — no responsive/mobile layout.
-- No IME/composition bridge, selection, or clipboard integration on web (audit §4.5, §4.6).
-- No DOM accessibility mirror (see `docs/ux/accessibility-baseline.md`).
+### iOS Safari considerations (risks, not verified behaviour)
 
-## 4. Graceful fallback strategy — **DESIGN PROPOSAL, NOT IMPLEMENTED**
+- No touch/pen/gesture normalization demonstrated in the web demo (audit §4.5).
+- `demos/adele-web/index.html` hardcodes a 1024×768 container (`overflow: hidden`) — no responsive/mobile layout.
+- IME/composition, selection and clipboard are prototyped (`demos/adele-web/src/a11y_bridge.rs`) but not wired through the shipped `index.html` startup.
+- No geometry-aware DOM accessibility tree; the bridge mirrors a small fixed set of nodes.
 
-Proposed sequence (none of these steps exists in code today):
+## 4. Graceful fallback UX — **message only (P1-4), not a fallback renderer**
 
-1. **Probe** at startup in the web shell: `navigator.gpu` → `canvas.getContext('webgl2')` → neither.
-2. **Report** the result to the Rust app through an explicit `wasm_bindgen` capability object, so shader/feature choices are runtime data rather than `cfg`.
-3. **Select** a renderer path: WebGPU, the existing WebGL2-oriented `*_wasm.wgsl` variants, or a documented "unsupported" state. (The existing `*_wasm` shaders currently cover only WebGL2-style binding-array limitations; they are not a full fallback renderer.)
-4. **Surface** a user-visible, localized fallback/error UI with a retry path — replacing the single red status string at `index.html:58-62`.
-5. **Announce** the failure through an accessibility live region once the web ARIA bridge from P1-3 exists.
+Implemented in `capability_probe::show_unsupported_notice()`:
 
-Acceptance for P1-4 requires runtime detection **and** user-facing fallback behaviour; both are currently missing.
+- creates an idempotent `<div role="alert">` with the text "This demo needs WebGPU or WebGL2; your browser/WebKit configuration is unsupported.";
+- the element is visually perceivable (no `display:none`/`visibility:hidden`);
+- returns `Result<(), String>` instead of panicking.
+
+Wiring is additive in `demos/adele-web/src/lib.rs`; the existing renderer path is unchanged.
+
+**Not implemented:** renderer tier selection, WebGL2 fallback rendering using the `*_wasm.wgsl` shaders, a retry path, localization, or an accessibility-announced failure from the real demo startup (the spike is not invoked by `index.html`).
 
 ## 5. Known gaps
 
-| Gap | Evidence / status |
+| Gap | Status / evidence |
 |---|---|
-| No browser/WebKit feature detection | Search of `.rs`/`.html`: no `navigator.gpu`, `getContext`, user-agent, or `matchMedia`. |
-| No graceful fallback UI beyond an error string | `demos/adele-web/index.html:52-65`. |
-| Shader variants are compile-time only | `cvkg-render-gpu/src/lib.rs:124-156`. |
-| Web path is canvas-only; no shipped DOM ARIA/labels | `demos/adele-web/index.html:47-51`; `demos/adele-web/src/lib.rs:60+` (all `renderer.*` draw calls). Audit §4.5. An **in-progress, uncommitted P1-3 spike** exists (`demos/adele-web/src/a11y_bridge.rs:1-18`, wired via `src/lib.rs:15,26-51`), but it is self-described proof-of-concept, covers two example nodes, and is **not called from `index.html:52-65`** — so the shipped demo still has no DOM a11y. |
-| No IME, selection, clipboard, or touch parity on web | Audit §4.5, §4.6. `arboard` is explicitly non-wasm (`cvkg-components/Cargo.toml:120-121`). |
-| Web build guide is stale | `docs/howto/build-for-web.md:18-19` points to `demos/niflheim-web`, which is not a workspace member (`Cargo.toml:3-43`); `:42` claims "WebGL2 or WebGPU"; `:48` has a "WebPU" typo and suggests browser flags. |
-| No verified Safari/iOS test report anywhere | Audit §2 explicitly lists no browser/device interoperability testing. |
+| WebGPU adapter-level verification | `capability_probe` checks API presence only; no `requestAdapter()` in the shipped probe. |
+| Full-demo wasm build | Previously blocked by `Send + Sync` errors in `cvkg-render-gpu`/`render-3d`/`export-raster`/`inputs`; being worked separately. |
+| DOM ARIA mirror in shipped demo | `demos/adele-web/src/a11y_bridge.rs` is a P1-3 spike, not called from `index.html`. |
+| IME, selection, clipboard, touch parity | Prototype in `a11y_bridge.rs`; not production-wired (`arboard` is non-wasm). |
+| Runtime shader tier selection | `RecommendedTier` exists; no consumer selects a shader/renderer path. |
+| Stale web build guide | `docs/howto/build-for-web.md` references `demos/niflheim-web`, which is not a workspace member. |
+| Safari/iOS test report | None. Only the Chromium run in §7 exists. |
 
 ## 6. Verification steps
 
-Run (proves compilation only, **not** WebKit compatibility):
+Compilation (proves wasm codegen only):
 
 ```bash
-cargo check -p cvkg-render-gpu --target wasm32-unknown-unknown
+cargo check --workspace --target wasm32-unknown-unknown
 cargo test -p cvkg-render-gpu
-wasm-pack build --target web --out-dir pkg demos/adele-web   # path may need adjusting
 ```
 
-Manual checks needed to close P1-4 (all currently expected to **expose gaps**):
+Manual, still required to close P1-4 for WebKit:
 
-1. Serve `demos/adele-web` locally (`docs/howto/build-for-web.md:22-29`) and open in Safari 26, Safari 18, and iOS Safari. Record console errors.
-2. In devtools, disable WebGPU / WebGL2 separately and reload — confirm whether any fallback UI appears (today: only the red status text).
-3. Inspect the DOM tree with VoiceOver or Safari's accessibility inspector — confirm whether any canvas content is exposed (today: expected **none** from normal startup; the P1-3 spike is not invoked by `index.html`).
-4. Record results into the matrix in §3 with browser/OS versions and screenshots; only then change any cell from "Untested".
+1. Serve `demos/adele-web` locally and open in Safari 26, Safari 18 and iOS Safari; record console errors.
+2. Disable WebGPU and WebGL2 separately and reload; confirm the `role="alert"` notice appears when both are absent.
+3. Inspect the accessibility tree with VoiceOver/Safari inspector; confirm which canvas UI is exposed.
+4. Record browser/OS versions, screenshots and results in the §3 matrix; only then change a cell from "Untested".
+
+## 7. Verification performed 2026-11-21 (real hardware, Chromium only)
+
+Environment: Linux Wayland, NVIDIA GeForce RTX 4070 (driver 620.73.04), Chromium 158.0.8127.36 headless via CDP, `wasm32-unknown-unknown`, `wasm-pack`.
+
+Method: the shipped `capability_probe.rs` was compiled into a minimal wasm harness (source included verbatim, module doc comments converted to line comments because `include!` rejects inner docs) and driven in Chromium with `Runtime.evaluate` and `Page.captureScreenshot`.
+
+| Case | Flags | Probe result | Fallback notice |
+|---|---|---|---|
+| APIs enabled | `--enable-unsafe-webgpu` | `webgpu=true`, `webgl2=true`, `webkit_like=true`, `supported=true`, `tier=WebGpu` | Not expected; `show_unsupported_notice()` returned `ok` when called explicitly |
+| APIs disabled | `--disable-webgl --disable-3d-apis`, no WebGPU flag | `webgpu=true` (API still exposed), `webgl2=false`, `webkit_like=true`, `supported=true` | Explicit call inserted a **visible** `role="alert"` node with the documented text |
+
+**Full demo load (same environment):** `wasm-pack build --target web --release demos/adele-web` succeeded after the wasm dependency fixes. Serving the built `index.html` in Chromium produced status text `Adele UI // Active` (no init failure), a `<canvas>` element, and zero inserted fallback notices — but the canvas stayed blank. `demos/adele-web/src/lib.rs:56-80` (`#[wasm_bindgen(start)] main()`) only installs the panic hook/logger and runs the capability probe; it never creates a GPU device, renderer, or frame loop. **The web demo currently does not render CVKG components.** This is recorded as a gap, not a pass.
+
+Conclusion: the DOM fallback element and the plain-data probe work in a real browser on real hardware. The second case also confirms the documented limitation that API presence (`navigator.gpu`) can outrank actual usability — WebGL2 was disabled but the probe still reported `supported=true` because it does not call `requestAdapter()`.
+
+Screenshots: `/tmp/opencode/probe.png`, `/tmp/opencode/probe-nogpu.png` (session-local, not committed).
+
+**This is not WebKit/Safari verification.** No Apple browser or WebKit engine was available; every WebKit cell in §3 remains *Untested*.

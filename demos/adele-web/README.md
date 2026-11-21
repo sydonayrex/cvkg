@@ -4,7 +4,9 @@ Web design system explorer built on CVKG with WebGPU/WASM.
 
 ## Purpose
 
-Demonstrates CVKG component rendering in a browser via WebGPU. Serves as a design system explorer and matrix comparison layout.
+Intended to demonstrate CVKG component rendering in a browser via WebGPU (design system explorer / matrix comparison layout).
+
+**Current state (verified 2026-11-21 in Chromium 158):** the crate compiles to wasm and `index.html` loads the module successfully, but `#[wasm_bindgen(start)] main()` (`src/lib.rs:56-80`) only installs the panic hook/logger and runs the P1-4 capability probe. It does **not** create a device, initialize a renderer, or start a frame loop, so the shipped page shows a blank canvas. Treat "demonstrates rendering" as aspirational until a render loop is wired. See `docs/platform/webkit-compatibility.md` §7.
 
 ## Boundaries
 

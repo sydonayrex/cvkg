@@ -15,8 +15,12 @@ bytemuck = "1.25"
 pollster = "0.4"
 log = "0.4"
 env_logger = "0.11"
-tokio = { version = "1.0", features = ["full"] }
 cvkg-runic-text = { version = "0.3.4", path = "../cvkg-runic-text" }
+
+# tokio's "full" feature pulls in mio, which cannot compile on wasm32-unknown-unknown.
+# This dependency is only used by native integration tests, so gate it off wasm.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
 walkdir = "2.3"

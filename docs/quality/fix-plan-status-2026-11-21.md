@@ -82,6 +82,69 @@ python3 scripts/validate_shaders.py --check PASS
 python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"  PASS
 ```
 
+## 5e. Hardware verification (2026-11-21)
+
+Environment: RTX 4070 (driver 620.73.04), Wayland/X display, Chromium 158,
+wasm32 target, wasm-pack. `agent-browser` CLI was not installed, so a small
+Chrome DevTools Protocol driver was used instead (outside the repo, in
+`/tmp/opencode`).
+
+- **Full wasm build unblocked (38/43 members):** removed the unused
+  `wasm-bindgen-rayon` dependency (it force-enabled atomics, which disabled the
+  safety-gated `Send`/`Sync` impls and surfaced all the `PassNode: Send + Sync`
+  errors); added `getrandom` `js` feature for `cvkg-flow` and gated `tokio`
+  `"full"`/`rt-multi-thread` off wasm in `cvkg`/`cvkg-test`. CI's `wasm-build`
+  job now checks the workspace with five native-only members excluded, and
+  `desktop-smoke` now also runs `cvkg-render-native --lib`. `.github/workflows/ci.yml`
+  was force-added to tracking — it was previously ignored by `.gitignore:1`
+  (`.*`) and had never been committed, so the manual-only trigger had not
+  actually reached the remote.
+- **Wasm demo built and loaded in Chromium:** `wasm-pack build --target web`
+  succeeded; the page reported `Adele UI // Active` with no init error. **The
+  canvas is blank** — `main()` installs hooks and runs the capability probe but
+  starts no renderer/frame loop. Recorded as a gap in the demo README and
+  `docs/platform/webkit-compatibility.md` §7.
+- **Journey reflow test de-flaked:** `cvkg-scene/tests/journey_tests.rs` looked up
+  any node whose `component_type.contains("Text")`, which nondeterministically
+  matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
+  Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Known remaining red test:** `cvkg-test --test visual_regression::test_generate_niflheim_screenshot`
+  reports 100% diff against its golden. Verified on a clean `HEAD` worktree with
+  identical output, and pixel-compared the clean-HEAD render with the current
+  render — **byte-identical**, so this work did not cause it. The current render
+  is a blank background with only tiny top-left text while the golden shows the
+  full Niflheim demo; this is a genuine pre-existing rendering regression
+  (likely the nodal-coordinate migration). The golden was restored rather than
+  overwritten with the broken output; fixing the rendering is a separate task.
+  Do not accept a new golden until the demo renders again.
+- **Scene consistency fixtures fixed:** `cvkg-scene/tests/consistency_tests.rs`
+  still expected `Text::render` to emit exactly one command; it now emits
+  `PushVNode("Text")`, `DrawText`, `PopVNode` (companion attachment). Updated the
+  assertion to check the three-command contract and accepted the regenerated
+  insta snapshot. These failures were previously masked because Cargo stops
+  after the first failing test binary; they surfaced once the GPU integration
+  suite went green. Verified 2/2.
+- **GPU integration tests fixed:** the two long-standing failures in
+  `cvkg-render-gpu/tests/integrated_ui_scenarios.rs` were a fixture problem, not
+  a hardware bug. `forge_headless` already selects the NVIDIA RTX 4070; the
+  unconditional ACES tone map in `bloom.wgsl::fs_composite` compresses channel
+  separation before sRGB8 readback, so the old raw-sRGB thresholds failed.
+  Recalibrated the two predicates to tone-mapped output without weakening hue
+  assertions. Verified with and without
+  `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json WGPU_BACKEND=vulkan`:
+  **20/20 passed** on real hardware.
+- **P1-4 capability probe, real browser:** compiled the shipped
+  `capability_probe.rs` into a standalone wasm harness and ran it in Chromium.
+  With WebGPU/WebGL2 enabled: `webgpu=true`, `webgl2=true`,
+  `webkit_like=true`, `supported=true`, `tier=WebGpu`. With
+  `--disable-webgl --disable-3d-apis`: `webgl2=false` but `navigator.gpu`
+  still present — confirming the documented "API presence only" limitation.
+- **Fallback UI:** `show_unsupported_notice()` inserted a visible
+  `role="alert"` element with the documented text (DOM query + screenshot).
+- Recorded in `docs/platform/webkit-compatibility.md` §7 and
+  `docs/ux/accessibility-baseline.md`. **No Safari/WebKit/iOS run** was possible;
+  all WebKit matrix cells remain Untested.
+
 ## 5d. Component/token parity docs
 
 - **P2-1:** `docs/quality/component-parity.md` — 8-dimension rubric, two

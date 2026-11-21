@@ -179,7 +179,9 @@ optional = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.89"
 wasm-bindgen-futures = "0.4.39"
-wasm-bindgen-rayon = "1.0"
+# wasm-bindgen-rayon was declared but never used; it also forces the `atomics`
+# + `bulk-memory` target features, which invalidates wgpu's
+# `fragile-send-sync-non-atomic-wasm` Send/Sync assumptions on this target.
 console_error_panic_hook = "0.1.7"
 web-sys = { version = "0.3.66", features = [
     "HtmlCanvasElement",
