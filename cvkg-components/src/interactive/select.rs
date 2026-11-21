@@ -4,8 +4,8 @@ use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD, RADIUS_SM};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_SELECT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -452,7 +452,28 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(AriaProperties::new(AriaRole::Combobox, &self.placeholder))
+        // P2-2: expose the live open/selected state rather than a bare role.
+        let is_open = cvkg_core::load_system_state()
+            .get_component_state::<bool>(self.id_hash)
+            .and_then(|v| v.read().ok().map(|g| *g))
+            .unwrap_or(self.is_open);
+        let selected = cvkg_core::load_system_state()
+            .get_component_state::<usize>(self.id_hash.wrapping_add(2))
+            .and_then(|v| v.read().ok().map(|g| *g))
+            .or(self.selected_index);
+        let value = selected
+            .and_then(|idx| self.options.get(idx))
+            .map(|(label, _)| label.clone());
+        let mut props = AriaProperties::new(AriaRole::Combobox, &self.placeholder)
+            .expanded(is_open)
+            .invalid(self.error_message.is_some());
+        if let Some(value) = value {
+            props = props.value(value);
+        }
+        if let Some(message) = &self.error_message {
+            props = props.description(message.clone());
+        }
+        Some(props)
     }
 }
 
@@ -845,5 +866,26 @@ impl View for ColorPicker {
             width: proposal.width.unwrap_or(200.0),
             height: 32.0,
         }
+    }
+}
+
+#[cfg(test)]
+mod aria_tests {
+    use super::*;
+    use cvkg_core::View;
+
+    #[test]
+    fn aria_properties_expose_documented_state() {
+        let select = Select::new("Choose")
+            .option("First", 1u32)
+            .option("Second", 2u32)
+            .selected(1);
+        let props = select
+            .aria_properties()
+            .expect("Select must publish aria properties");
+        assert_eq!(props.role, AriaRole::Combobox);
+        assert_eq!(props.expanded, Some(false));
+        assert_eq!(props.value.as_deref(), Some("Second"));
+        assert_eq!(props.invalid, Some(false));
     }
 }

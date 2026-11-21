@@ -117,6 +117,11 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **P2-2 Select ARIA state:** `Select::aria_properties` now reads live open
+  and selected state from system state and emits `aria-expanded`, `value` and
+  `aria-invalid` (plus the error description). Added a focused unit test;
+  component lib suite → 124 passed.
+
 - **P1-5 web input slice:** `demos/adele-web/src/web_input.rs` makes the canvas
   focusable, normalizes browser key names/modifiers through the shared
   `cvkg_core` API, tracks pointer position, announces focus/key activity via the
