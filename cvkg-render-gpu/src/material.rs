@@ -466,7 +466,7 @@ impl MaterialCompiler {
                     format!(
                         r#"
     let _d = sd_round_rect(in.logical - {0}, {0} - in.radius, in.radius);
-    let _aa = fwidth(_d);
+    let _aa = fw;
     __RESULT__ = vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)));"#,
                         half
                     ).trim().to_string()
@@ -477,7 +477,7 @@ impl MaterialCompiler {
                         r#"
     let _sh = max({0}, vec2<f32>(0.001));
     let _d = length((in.logical - {0}) / _sh) - 1.0;
-    let _aa = fwidth(_d);
+    let _aa = fw;
     __RESULT__ = vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)));"#,
                         half
                     ).trim().to_string()
@@ -549,7 +549,7 @@ impl MaterialCompiler {
     let light_dir_h = normalize(vec2<f32>(-0.4, -0.8));
     let l = dot(uv, light_dir_h);
     final_rgb += smoothstep(0.45, 0.55, l) * 0.12;
-    __RESULT__ = vec4<f32>(final_rgb, 0.02 + fresnel * 0.15) * (1.0 - smoothstep(-length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), d_sdf));"#.trim().to_string()
+    __RESULT__ = vec4<f32>(final_rgb, 0.02 + fresnel * 0.15) * (1.0 - smoothstep(-fw, fw, d_sdf));"#.trim().to_string()
                 }
                 MaterialOp::LayerBlend { mode } => {
                     let bottom = Self::find_input(&var_names, node_id, MaterialSocket::Color, graph)
@@ -710,7 +710,7 @@ impl MaterialCompiler {
     let half_size = in.size * 0.5;
     let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
     let thickness = max(in.slice.x, 1.0);
-    let fw = length(vec2(dpdx(in.logical.x), dpdy(in.logical.y)));
+    // fw is supplied by the caller (computed in uniform control flow).
     __RESULT__ = vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(-fw, fw, abs(d + thickness * 0.5) - thickness * 0.5)));"#.trim().to_string()
                 }
                 MaterialOp::DashedStroke => {
@@ -719,7 +719,7 @@ impl MaterialCompiler {
     let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
     let thickness = max(in.slice.x, 1.0);
     let perimeter = (in.uv.x + in.uv.y) * max(in.size.x, in.size.y);
-    var alpha = 1.0 - smoothstep(-length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), abs(d + thickness * 0.5) - thickness * 0.5);
+    var alpha = 1.0 - smoothstep(-fw, fw, abs(d + thickness * 0.5) - thickness * 0.5);
     if (perimeter + scene.time * 20.0) % (max(in.slice.y, 1.0) + max(in.slice.z, 1.0)) > max(in.slice.y, 1.0) { alpha = 0.0; }
     __RESULT__ = vec4<f32>(col.rgb, col.a * alpha);"#.trim().to_string()
                 }
@@ -741,7 +741,7 @@ impl MaterialCompiler {
         let fn_name = "material_entry".to_string();
 
         let wgsl_fn = format!(
-            "fn {}(in: VertexOutput, col: vec4<f32>) -> vec4<f32> {{\n{}\n    return v_{};\n}}",
+            "fn {}(in: VertexOutput, col: vec4<f32>, fw: f32) -> vec4<f32> {{\n{}\n    return v_{};\n}}",
             fn_name, body, out_id
         );
 
@@ -1105,7 +1105,7 @@ fn build_builtins_wgsl(
 
     let mut dispatch = String::new();
     dispatch.push_str(
-        "fn dispatch_material(material_id: u32, in: VertexOutput, col: vec4<f32>) -> vec4<f32> {\n",
+        "fn dispatch_material(material_id: u32, in: VertexOutput, col: vec4<f32>, fw: f32) -> vec4<f32> {\n",
     );
     dispatch.push_str("    switch material_id {\n");
 
@@ -1121,7 +1121,7 @@ fn build_builtins_wgsl(
                 out.push_str(&fn_code);
                 out.push_str("\n\n");
                 dispatch.push_str(&format!(
-                    "        case {}u: {{ return {}(in, col); }}\n",
+                    "        case {}u: {{ return {}(in, col, fw); }}\n",
                     id, fn_name
                 ));
             }

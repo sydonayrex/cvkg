@@ -31,7 +31,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ── Material Dispatch ────────────────────────────────────────────────
     // Calls the appropriate material function based on material_id.
     // Material functions are auto-generated from MaterialGraph definitions.
-    color = dispatch_material(in.material_id, in, color);
+    color = dispatch_material(in.material_id, in, color, fw);
 
     // ── Berserker Rage Effect (applied to all materials) ─────────────────
     let rage = scene.berzerker_rage;

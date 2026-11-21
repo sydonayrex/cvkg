@@ -112,13 +112,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         } else {
             d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
         }
-        let aa = fwidth(d);
+        let aa = fw;
         color.a *= 1.0 - smoothstep(0.0, aa, d);
     } else if in.material_id == 4u {
         let half_size = in.size * 0.5;
         let safe_half = max(half_size, vec2<f32>(0.001));
         let d = length((in.logical - half_size) / safe_half) - 1.0;
-        let aa = fwidth(d);
+        let aa = fw;
         color.a *= 1.0 - smoothstep(0.0, aa, d);
     } else if in.material_id == 8u {
         // Neon Glow (Gungnir)

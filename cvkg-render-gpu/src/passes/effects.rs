@@ -181,7 +181,11 @@ impl KvasirNode for EffectCompositeNode {
             &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: crate::texture_binding(&vec![&input_view; ctx.renderer.capability_tier.texture_array_count as usize]),
+                    resource: crate::texture_binding(&vec![
+                        &input_view;
+                        ctx.renderer.capability_tier.texture_array_count
+                            as usize
+                    ]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -206,7 +210,7 @@ impl KvasirNode for EffectCompositeNode {
             &ctx.renderer.effect_params_buffer,
             0,
             bytemuck::cast_slice(&[crate::types::EffectUniforms {
-                time: ctx.renderer.start_time.elapsed().as_secs_f32(),
+                time: crate::time_util::elapsed_since(&ctx.renderer.start_time),
                 pad0: 0.0,
                 size: [
                     ctx.renderer.current_width() as f32,

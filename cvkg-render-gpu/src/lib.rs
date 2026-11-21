@@ -36,6 +36,8 @@ pub mod kvasir;
 mod material;
 // P0-3: single source of truth for composed WGSL programs (runtime + tests).
 pub(crate) mod shader_composition;
+// P1-4: wasm-safe clock used by renderer timestamps.
+pub(crate) mod time_util;
 
 // Re-export material types for downstream users
 pub use material::builtins;

@@ -19,7 +19,7 @@ impl GpuRenderer {
             .headless_context
             .as_ref()
             .expect("Headless context not initialized");
-        let time = self.start_time.elapsed().as_secs_f32();
+        let time = crate::time_util::elapsed_since(&self.start_time);
         let logical_w = ctx.width as f32 / ctx.scale_factor;
         let logical_h = ctx.height as f32 / ctx.scale_factor;
         let dt = time - self.current_scene.time;
@@ -101,7 +101,7 @@ impl GpuRenderer {
             let cutoff = self.frame_generation - MAX_MEMO_AGE;
             self.memo_cache.retain(|_, entry| entry.frame_gen >= cutoff);
         }
-        self.last_frame_start = std::time::Instant::now();
+        self.last_frame_start = crate::time_util::now();
         self.telemetry.draw_calls = 0;
         self.telemetry.vertices = 0;
     }
@@ -148,7 +148,7 @@ impl GpuRenderer {
             .surfaces
             .get(&window_id)
             .expect("Window not registered");
-        let time = self.start_time.elapsed().as_secs_f32();
+        let time = crate::time_util::elapsed_since(&self.start_time);
         let logical_w = ctx.config.width as f32 / ctx.scale_factor;
         let logical_h = ctx.config.height as f32 / ctx.scale_factor;
         let dt = time - self.current_scene.time;
@@ -1161,7 +1161,7 @@ impl GpuRenderer {
             // Only BloomExtract/BloomBlur (post-processing glow) and Volumetric
             // (raymarched lighting) are true cosmetics and safe to degrade.
             if allow_degradation && budget_ms > 0.0 {
-                let elapsed_ms = frame_start.elapsed().as_secs_f32() * 1000.0;
+                let elapsed_ms = crate::time_util::elapsed_since(&frame_start) * 1000.0;
                 if elapsed_ms > budget_ms
                     && let Some(node) = cached.graph.node(node_key)
                 {
@@ -1308,8 +1308,10 @@ impl GpuRenderer {
         }
 
         // 3. Compact dead particles periodically (every 2 seconds)
-        if self.particles.count > 0 && self.particles.last_compact.elapsed().as_secs_f32() > 2.0 {
-            self.particles.last_compact = std::time::Instant::now();
+        if self.particles.count > 0
+            && crate::time_util::elapsed_since(&self.particles.last_compact) > 2.0
+        {
+            self.particles.last_compact = crate::time_util::now();
             // Read back particle data to compact dead particles
             let read_size = (self.particles.count as usize
                 * std::mem::size_of::<crate::types::GpuParticle>())
@@ -1410,7 +1412,8 @@ impl GpuRenderer {
 
         let cmds = std::mem::take(&mut self.staging_command_buffers);
         self.queue.submit(cmds);
-        self.telemetry.frame_time_ms = self.last_frame_start.elapsed().as_secs_f32() * 1000.0;
+        self.telemetry.frame_time_ms =
+            crate::time_util::elapsed_since(&self.last_frame_start) * 1000.0;
         self.update_vram_telemetry();
 
         // Evict transient frame resources (portal regions, offscreen effects) back into

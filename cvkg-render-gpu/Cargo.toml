@@ -177,6 +177,7 @@ version = "0.22"
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
 wasm-bindgen = "0.2.89"
 wasm-bindgen-futures = "0.4.39"
 # wasm-bindgen-rayon was declared but never used; it also forces the `atomics`

@@ -101,7 +101,7 @@ fn sample_shadow_atlas(cascade_idx: u32, light_vp: mat4x4<f32>, world_pos: vec3<
     for (var dx = -1; dx <= 1; dx++) {
         for (var dy = -1; dy <= 1; dy++) {
             let offset = vec2<f32>(f32(dx), f32(dy)) * texel_size;
-            shadow += textureSampleCompare(t_shadow, s_shadow,
+            shadow += textureSampleCompareLevel(t_shadow, s_shadow,
                 atlas_uv + offset, light_depth - scene.shadow_bias);
         }
     }

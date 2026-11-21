@@ -106,11 +106,13 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   renderer's `Instant::now()` panicked on wasm, so its clock now uses
   `js_sys::Date` on that target.
 - **WebGPU runtime bugs found by hardware verification** (naga/native tests
-  could not catch these): out-of-range `f32` literal in the numeric guard;
-  `BINDING_INDEXING` feature/TextureViewArray binding on WebGPU; `textureSample`
-  in non-uniform material branches. All three fixed. Remaining WebGPU blockers:
-  `dpdx`/`dpdy`/`fwidth` under non-uniform branches and a `std::thread::spawn`
-  panic — tracked in `docs/platform/webkit-compatibility.md` §7.
+  could not catch these): out-of-range `f32` literal, `BINDING_INDEXING` /
+  TextureViewArray bindings, derivative/`textureSample`/`textureSampleCompare`
+  calls in non-uniform branches, a background font thread on wasm, renderer
+  `Instant::now()`/`temp_dir()` panics, and depth textures with filtering
+  samplers. **All fixed.** The shipped demo now renders via WebGPU in Chromium
+  with zero errors and falls back to the software renderer if WebGPU fails.
+  Details in `docs/platform/webkit-compatibility.md` §7.
 - **Journey reflow test de-flaked:** `cvkg-scene/tests/journey_tests.rs` looked up
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.

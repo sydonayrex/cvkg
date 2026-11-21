@@ -2,9 +2,9 @@
 //!
 //! Extracted from draw.rs for modularization.
 
+use crate::renderer::GpuRenderer;
 use crate::types::*;
 use crate::vertex::Vertex;
-use crate::renderer::GpuRenderer;
 use cvkg_core::{Rect, Renderer};
 
 impl GpuRenderer {
@@ -31,10 +31,7 @@ impl GpuRenderer {
         // volumetric pass is skipped by the frame budget system. This prevents
         // a visible time pop when the pass resumes after being skipped.
         let current_time = self.current_time();
-        let resolution = [
-            self.current_width() as f32,
-            self.current_height() as f32,
-        ];
+        let resolution = [self.current_width() as f32, self.current_height() as f32];
         let time_uniform: [f32; 4] = [
             current_time,
             resolution[0],
@@ -52,10 +49,9 @@ impl GpuRenderer {
         const MAX_MEMO_AGE: u64 = 1000;
         if self.frame_generation > MAX_MEMO_AGE {
             let cutoff = self.frame_generation - MAX_MEMO_AGE;
-            self.memo_cache
-                .retain(|_, entry| entry.frame_gen >= cutoff);
+            self.memo_cache.retain(|_, entry| entry.frame_gen >= cutoff);
         }
-        self.last_frame_start = std::time::Instant::now();
+        self.last_frame_start = crate::time_util::now();
         self.telemetry.draw_calls = 0;
         self.telemetry.vertices = 0;
     }
@@ -73,7 +69,7 @@ impl GpuRenderer {
             .headless_context
             .as_ref()
             .expect("Headless context not initialized");
-        let time = self.start_time.elapsed().as_secs_f32();
+        let time = crate::time_util::elapsed_since(&self.start_time);
         let logical_w = ctx.width as f32 / ctx.scale_factor;
         let logical_h = ctx.height as f32 / ctx.scale_factor;
         let dt = time - self.current_scene.time;
@@ -103,11 +99,18 @@ impl GpuRenderer {
 
     /// Begin a frame without resetting per-frame state.
     /// Used when reusing the previous frame's draw calls (view unchanged).
-    pub fn begin_frame_reuse(&mut self, window_id: winit::window::WindowId) -> wgpu::CommandEncoder {
+    pub fn begin_frame_reuse(
+        &mut self,
+        window_id: winit::window::WindowId,
+    ) -> wgpu::CommandEncoder {
         self.begin_frame_internal(window_id, false)
     }
 
-    fn begin_frame_internal(&mut self, window_id: winit::window::WindowId, reset_state: bool) -> wgpu::CommandEncoder {
+    fn begin_frame_internal(
+        &mut self,
+        window_id: winit::window::WindowId,
+        reset_state: bool,
+    ) -> wgpu::CommandEncoder {
         // Drain AI material channel
         if let Some(rx) = &self.ai_material_rx {
             while let Ok(res) = rx.try_recv() {
@@ -131,7 +134,7 @@ impl GpuRenderer {
             .surfaces
             .get(&window_id)
             .expect("Window not registered");
-        let time = self.start_time.elapsed().as_secs_f32();
+        let time = crate::time_util::elapsed_since(&self.start_time);
         let logical_w = ctx.config.width as f32 / ctx.scale_factor;
         let logical_h = ctx.config.height as f32 / ctx.scale_factor;
         let dt = time - self.current_scene.time;

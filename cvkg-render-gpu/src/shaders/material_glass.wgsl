@@ -75,14 +75,15 @@ fn displacement_offset(
     lens_dist: f32,
     lens_normal: vec2<f32>,
     time: f32,
+    fw: f32,
 ) -> vec2<f32> {
     // Edge displacement: strongest at edges, fades inward
     let edge_factor = smoothstep(0.3, 0.5, lens_dist);
 
     // Use screen-space derivatives for distortion magnitude
-    let dx = length(vec2(dpdx(uv.x), dpdy(uv.x)));
-    let dy = length(vec2(dpdx(uv.y), dpdy(uv.y)));
-    let deriv_scale = max(dx, dy) * 50.0;
+    // Derivatives are computed uniformly by the caller and passed in;
+    // WGSL forbids dpdx/dpdy in non-uniform material branches.
+    let deriv_scale = fw * 50.0;
 
     // Displacement direction: along the normal, pushing outward at edges
     let disp_mag = edge_factor * deriv_scale * 0.15;
@@ -298,7 +299,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ─── Section 9: Displacement + Specular ────────────────────────────────────
 
     // Apply displacement offset to the refraction for "wet glass" edge distortion
-    let disp = displacement_offset(screen_uv, local, lens_dist, lens_normal, scene.time);
+    let disp = displacement_offset(screen_uv, local, lens_dist, lens_normal, scene.time, fw);
     let displaced_screen_uv = screen_uv + disp * dist_fade;
     let displaced_refracted = vec3<f32>(
         textureSampleLevel(t_env, s_env, displaced_screen_uv + safe_distortion * 0.04, blur_mip).r,

@@ -212,7 +212,7 @@ pub struct GpuRenderer {
     pub(crate) portal_theme_stack: Vec<ColorTheme>,
     pub(crate) berserker_bind_group: wgpu::BindGroup,
     pub(crate) berserker_bind_group_layout: wgpu::BindGroupLayout,
-    pub(crate) start_time: std::time::Instant,
+    pub(crate) start_time: crate::time_util::TimeStamp,
     pub(crate) current_theme: ColorTheme,
     pub(crate) current_scene: SceneUniforms,
     pub(crate) current_z: f32,
@@ -341,9 +341,9 @@ pub struct GpuRenderer {
     /// Staging buffer for windowed frame capture.
     pub(crate) capture_staging_buffer: Option<wgpu::Buffer>,
     /// Instant at the start of the last redraw, used for measuring frame timings.
-    pub last_redraw_start: std::time::Instant,
+    pub last_redraw_start: crate::time_util::TimeStamp,
     /// Instant at the start of the last frame, used for frame_time_ms calculation.
-    pub last_frame_start: std::time::Instant,
+    pub last_frame_start: crate::time_util::TimeStamp,
 
     // VRAM Tracking (Bytes)
     pub(crate) vram_buffers_bytes: u64,
@@ -1194,7 +1194,7 @@ impl GpuRenderer {
     }
 
     pub fn reset_time(&mut self) {
-        self.start_time = std::time::Instant::now();
+        self.start_time = crate::time_util::now();
     }
 
     pub fn reclaim_vram(&mut self) {
@@ -1352,17 +1352,21 @@ impl GpuRenderer {
 
 impl Drop for GpuRenderer {
     fn drop(&mut self) {
-        let cache_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
-            .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
-        let _ = std::fs::create_dir_all(&cache_dir);
-        let cache_path = cache_dir.join("cvkg_render_gpu.bin");
-        if let Some(cache) = &self.pipeline_cache
-            && let Some(data) = cache.get_data()
-            && let Err(e) = std::fs::write(&cache_path, data)
+        // WebAssembly has no filesystem; `std::env::temp_dir()` panics there.
+        #[cfg(not(target_arch = "wasm32"))]
         {
-            tracing::warn!("Failed to persist pipeline cache: {}", e);
+            let cache_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
+                .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
+            let _ = std::fs::create_dir_all(&cache_dir);
+            let cache_path = cache_dir.join("cvkg_render_gpu.bin");
+            if let Some(cache) = &self.pipeline_cache
+                && let Some(data) = cache.get_data()
+                && let Err(e) = std::fs::write(&cache_path, data)
+            {
+                tracing::warn!("Failed to persist pipeline cache: {}", e);
+            }
         }
 
         let _ = self.device.poll(wgpu::PollType::Wait {
@@ -1407,7 +1411,7 @@ impl GpuRenderer {
     }
 
     pub(crate) fn current_time(&self) -> f32 {
-        self.start_time.elapsed().as_secs_f32()
+        crate::time_util::elapsed_since(&self.start_time)
     }
 
     /// forge_headless -- Initializes Surtr without a window for visual regression testing.

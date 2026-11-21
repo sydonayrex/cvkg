@@ -129,7 +129,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
         }
 
         // Update Time & Uniforms (Direct write is fine for small uniforms)
-        self.current_scene.time = self.start_time.elapsed().as_secs_f32();
+        self.current_scene.time = crate::time_util::elapsed_since(&self.start_time);
         self.queue.write_buffer(
             &self.scene_buffer,
             0,

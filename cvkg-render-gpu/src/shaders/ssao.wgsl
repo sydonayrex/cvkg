@@ -68,10 +68,10 @@ fn random_direction(co: vec2<f32>) -> vec2<f32> {
 // Fragment shader to compute SSAO occlusion factor.
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec2<f32> {
-    let depth = textureSample(t_depth, s_depth, in.uv);
+    let depth = textureSampleLevel(t_depth, s_depth, in.uv, 0i);
     var occlusion_factor = 1.0;
     if (depth < 1.0) {
-        let normal = normalize(textureSample(t_normal, s_normal, in.uv).xyz * 2.0 - 1.0);
+        let normal = normalize(textureSampleLevel(t_normal, s_normal, in.uv, 0.0).xyz * 2.0 - 1.0);
         let sample_radius = 0.05;
         var occlusion = 0.0;
         let sample_count = 16;
@@ -80,7 +80,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec2<f32> {
         for (var i = 0; i < sample_count; i = i + 1) {
             let offset_dir = random_direction(in.uv + vec2<f32>(f32(i), 0.0));
             let sample_uv = in.uv + offset_dir * sample_radius;
-            let sample_depth = textureSample(t_depth, s_depth, sample_uv);
+            let sample_depth = textureSampleLevel(t_depth, s_depth, sample_uv, 0i);
 
             if (sample_depth < depth - 0.0001) {
                 occlusion += 1.0;

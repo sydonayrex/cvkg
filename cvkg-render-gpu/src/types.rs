@@ -595,7 +595,7 @@ pub struct ParticleSubsystem {
     /// MAX_PARTICLES).
     pub write_head: u32,
     /// Timestamp of last buffer compaction (dead particle removal).
-    pub last_compact: std::time::Instant,
+    pub last_compact: crate::time_util::TimeStamp,
 }
 
 impl ParticleSubsystem {
@@ -605,7 +605,7 @@ impl ParticleSubsystem {
             staging: Vec::new(),
             count: 0,
             write_head: 0,
-            last_compact: std::time::Instant::now(),
+            last_compact: crate::time_util::now(),
         }
     }
 }

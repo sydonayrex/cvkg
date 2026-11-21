@@ -79,16 +79,17 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fs_deferred_resolve(in: VertexOutput) -> @location(0) vec4<f32> {
-    let albedo = textureSample(t_albedo, s_albedo, in.uv);
-    let normal_val = textureSample(t_normal, s_normal, in.uv).xyz;
+    let albedo = textureSampleLevel(t_albedo, s_albedo, in.uv, 0.0);
+    let normal_val = textureSampleLevel(t_normal, s_normal, in.uv, 0.0).xyz;
     let normal = normalize(normal_val * 2.0 - 1.0);
-    let depth = textureSample(t_depth, s_depth, in.uv);
+    // Depth-texture sampling requires an integer LOD in WGSL.
+    let depth = textureSampleLevel(t_depth, s_depth, in.uv, 0i);
 
     if (depth >= 1.0) {
         return vec4<f32>(0.02, 0.02, 0.05, 1.0);
     }
 
-    let ssao = textureSample(t_ssao, s_ssao, in.uv).r;
+    let ssao = textureSampleLevel(t_ssao, s_ssao, in.uv, 0.0).r;
 
     let light_dir = normalize(scene.light_direction);
     let n_dot_l = max(dot(normal, light_dir), 0.0);

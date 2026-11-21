@@ -81,15 +81,24 @@ pub fn main() -> Result<(), JsValue> {
         }
     }
 
-    // P1-3 continuation: prove the GPU pipeline actually runs in the browser.
-    // The headless renderer needs no winit window, so its readback is blitted
-    // into the canvas. Kept additive: failures are logged, never panics.
+    // P1-3/P1-4 continuation: prove CVKG actually renders in the browser.
+    // Prefer the real WebGPU renderer (headless, no winit window needed);
+    // fall back to the software renderer if the GPU path fails. Failures are
+    // logged, never panics.
     #[cfg(target_arch = "wasm32")]
     if capabilities.is_supported() {
         wasm_bindgen_futures::spawn_local(async {
-            match web_render::render_once("cvkg-canvas", 800, 600).await {
-                Ok(()) => log::info!("[web-render] frame blitted to canvas"),
-                Err(error) => log::error!("[web-render] failed: {error}"),
+            match web_render::render_gpu_once("cvkg-canvas", 800, 600).await {
+                Ok(()) => log::info!("[web-render] WebGPU frame blitted to canvas"),
+                Err(error) => {
+                    log::warn!(
+                        "[web-render] WebGPU path failed, using software fallback: {error:?}"
+                    );
+                    match web_render::render_once("cvkg-canvas", 800, 600).await {
+                        Ok(()) => log::info!("[web-render] software frame blitted to canvas"),
+                        Err(error) => log::error!("[web-render] fallback failed: {error}"),
+                    }
+                }
             }
         });
     }

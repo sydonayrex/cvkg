@@ -221,9 +221,15 @@ impl TextEngine {
         let jupiteroid_data = include_bytes!("../Fonts/Jupiteroid.ttf").to_vec();
         db.load_font_data(jupiteroid_data.clone());
 
+        #[cfg(not(target_arch = "wasm32"))]
         let bg_db_arc = std::sync::Arc::new(std::sync::Mutex::new(None));
+        #[cfg(not(target_arch = "wasm32"))]
         let bg_db_clone = bg_db_arc.clone();
 
+        // P1-4: `std::thread::spawn` is unsupported on wasm32-unknown-unknown.
+        // The bundled font is already loaded synchronously above, so the
+        // background warm-up adds nothing on wasm and must be skipped.
+        #[cfg(not(target_arch = "wasm32"))]
         std::thread::spawn(move || {
             let mut bg_db = Database::new();
             bg_db.load_font_data(jupiteroid_data);
@@ -250,7 +256,17 @@ impl TextEngine {
             db,
             font_data,
             scale_context: ScaleContext::new(),
-            bg_db: Some(bg_db_arc),
+            // No background loader on wasm, so no handle to poll.
+            bg_db: {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    Some(bg_db_arc)
+                }
+                #[cfg(target_arch = "wasm32")]
+                {
+                    None
+                }
+            },
         }
     }
 

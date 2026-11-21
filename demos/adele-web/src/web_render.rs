@@ -118,3 +118,58 @@ mod tests {
         assert!(renderer.framebuffer().pixels().iter().any(|&p| p != 0));
     }
 }
+
+/// GPU-backed frame path for verification (wasm only).
+///
+/// Uses `GpuRenderer::forge_headless` on the real WebGPU adapter and blits the
+/// readback to a 2D canvas. Exported to JS so a browser can exercise it
+/// explicitly without changing the shipped software fallback in `main()`.
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub async fn render_gpu_once(
+    canvas_id: &str,
+    width: u32,
+    height: u32,
+) -> Result<(), wasm_bindgen::JsValue> {
+    use cvkg_core::FrameRenderer;
+    use cvkg_render_gpu::GpuRenderer;
+
+    let document = web_sys::window()
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("no window"))?
+        .document()
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("no document"))?;
+    let canvas = document
+        .get_element_by_id(canvas_id)
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("canvas missing"))?
+        .dyn_into::<web_sys::HtmlCanvasElement>()
+        .map_err(|_| wasm_bindgen::JsValue::from_str("not a canvas"))?;
+    canvas.set_width(width);
+    canvas.set_height(height);
+    let context = canvas
+        .get_context("2d")
+        .map_err(|_| wasm_bindgen::JsValue::from_str("no 2d context"))?
+        .ok_or_else(|| wasm_bindgen::JsValue::from_str("no 2d context"))?
+        .dyn_into::<web_sys::CanvasRenderingContext2d>()
+        .map_err(|_| wasm_bindgen::JsValue::from_str("wrong context"))?;
+
+    cvkg_core::set_theme_context(cvkg_core::ThemeContext::dark());
+    let mut renderer = GpuRenderer::forge_headless(width, height).await;
+    let encoder = renderer.begin_frame_headless();
+    draw_demo_frame(&mut renderer, width, height);
+    renderer.render_frame();
+    renderer.end_frame(encoder);
+    let pixels = renderer
+        .capture_frame()
+        .await
+        .map_err(|e| wasm_bindgen::JsValue::from_str(&e))?;
+    let image = web_sys::ImageData::new_with_u8_clamped_array_and_sh(
+        wasm_bindgen::Clamped(pixels.as_slice()),
+        width,
+        height,
+    )
+    .map_err(|_| wasm_bindgen::JsValue::from_str("ImageData failed"))?;
+    context
+        .put_image_data(&image, 0.0, 0.0)
+        .map_err(|_| wasm_bindgen::JsValue::from_str("putImageData failed"))?;
+    Ok(())
+}

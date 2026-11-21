@@ -21,7 +21,7 @@ impl cvkg_core::ElapsedTime for GpuRenderer {
     }
 
     fn elapsed_time(&self) -> f32 {
-        self.start_time.elapsed().as_secs_f32()
+        crate::time_util::elapsed_since(&self.start_time)
     }
 }
 
@@ -44,7 +44,8 @@ impl cvkg_core::RendererErrorHandler for GpuRenderer {
 impl cvkg_core::Renderer for GpuRenderer {
     fn is_over_budget(&self) -> bool {
         self.frame_budget.allow_degradation
-            && self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
+            && crate::time_util::elapsed_since(&self.last_frame_start) * 1000.0
+                > self.frame_budget.target_ms
     }
 
     fn text_scale_factor(&self) -> f32 {
@@ -995,7 +996,7 @@ impl cvkg_core::Renderer for GpuRenderer {
         use crate::types::GpuParticle;
 
         let dt = self.current_scene.delta_time;
-        let now = std::time::Instant::now();
+        let now = crate::time_util::now();
 
         // Determine spawn parameters based on effect type
         let (speed_range, life_range, spread_angle) = match effect_type {
@@ -1007,12 +1008,13 @@ impl cvkg_core::Renderer for GpuRenderer {
             _ => (30.0..120.0, 1.0..2.0, std::f32::consts::TAU),
         };
 
-        let count = count.min((self.capability_tier.max_particles - self.particles.count as usize) as u32);
+        let count =
+            count.min((self.capability_tier.max_particles - self.particles.count as usize) as u32);
         if count == 0 {
             return;
         }
 
-        let mut rng_state = (now.elapsed().as_nanos() as u64)
+        let mut rng_state = crate::time_util::elapsed_nanos(&now)
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         let mut rand_f32 = |range: std::ops::Range<f32>| -> f32 {
@@ -1107,7 +1109,11 @@ impl cvkg_core::Renderer for GpuRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: crate::texture_binding(&vec![&view; self.capability_tier.texture_array_count as usize]),
+                    resource: crate::texture_binding(&vec![
+                        &view;
+                        self.capability_tier.texture_array_count
+                            as usize
+                    ]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
