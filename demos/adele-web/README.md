@@ -98,7 +98,7 @@ subset of those interactions onto real, offscreen DOM nodes.
 - **`remove_node` does not reparent descendants.** Children keep their old DOM
   location; callers must remove children first.
 - **No automated tests, no VoiceOver run, no conformance claim.** The manual
-  matrix below is still outstanding. This is a spike, not a shipped feature.
+  matrix below is still outstanding. The spike is now invoked automatically at startup, but it remains a proof of concept, not a complete accessibility layer.
 - Pointer/touch/wheel normalization and fallback UX are explicitly out of
   scope (they belong to P1-4/P1-5 in the plan).
 
@@ -135,7 +135,7 @@ point for manual testing.
    full wasm build is currently blocked upstream.
 2. Open the page in Safari, and/or drive WebKit via Playwright
    (`browserType.webkit.launch()`).
-3. In the devtools console call `init_a11y_bridge_spike('cvkg-canvas')` with the
+3. The bridge is now initialised automatically from Rust startup; the `init_a11y_bridge_spike('cvkg-canvas')` entry point remains available if you want to call it manually with the
    real canvas id. Check the DOM for a container carrying
    `data-cvkg-a11y-spike="1"` containing the live region and textarea.
 4. Turn on VoiceOver (Cmd+F5 on macOS) and use the rotor / Tab to reach the

@@ -81,6 +81,14 @@ pub fn main() -> Result<(), JsValue> {
         }
     }
 
+    // P1-3: wire the offscreen DOM accessibility/text bridge into the shipped
+    // startup path. It mirrors a heading and a textbox for assistive tech and
+    // provides an IME/composition proxy; failure is logged, never panics.
+    #[cfg(target_arch = "wasm32")]
+    if let Err(error) = init_a11y_bridge_spike("cvkg-canvas") {
+        log::warn!("[a11y-spike] init failed: {error:?}");
+    }
+
     // P1-3/P1-4 continuation: prove CVKG actually renders in the browser.
     // Prefer the real WebGPU renderer (headless, no winit window needed);
     // fall back to the software renderer if the GPU path fails. Failures are

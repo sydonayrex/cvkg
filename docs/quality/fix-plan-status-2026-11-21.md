@@ -117,6 +117,12 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **P1-3 bridge wired into shipped startup:** `main()` now calls
+  `init_a11y_bridge_spike("cvkg-canvas")` and logs failures. Verified in Chromium:
+  mirrored heading/textbox nodes, `aria-live=polite` region, focusable textarea
+  proxy, and `TextChanged("hello")` forwarded from a synthetic `input` event —
+  all with zero console errors and WebGPU rendering still active.
+
 - **Niflheim layout pass (completed):** root cause was threefold: (1) the
   layout engine's `compute_layout_rects_local` used a hardcoded **0×0**
   container so flex tracks resolved to zero — it now receives the real bounds;
