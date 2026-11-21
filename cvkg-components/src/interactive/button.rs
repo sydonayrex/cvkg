@@ -1,5 +1,5 @@
-use crate::theme;
 use crate::integration::{CompanionBundle, WorldSpaceConfig};
+use crate::theme;
 use crate::{ButtonSize, ButtonVariant, FONT_BASE, RADIUS_MD};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, Size, View};
@@ -670,10 +670,22 @@ impl View for Button {
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(
-            AriaProperties::new(AriaRole::Button, &self.label)
-                .disabled(self.disabled || self.loading),
-        )
+        let mut props = AriaProperties::new(AriaRole::Button, &self.label)
+            .disabled(self.disabled || self.loading);
+        // P2-2: expose transient press state from VDOM system state so
+        // assistive tech sees the same state the renderer uses for the
+        // pressed visual variant.
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.label.hash(&mut hasher);
+        let id_hash = hasher.finish();
+        if let Some(pressed) = cvkg_core::load_system_state()
+            .get_component_state::<bool>(id_hash)
+            .and_then(|v| v.read().ok().map(|g| *g))
+        {
+            props = props.pressed(pressed);
+        }
+        Some(props)
     }
 
     fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {

@@ -110,6 +110,11 @@ impl AriaProperties {
         self.checked = Some(c);
         self
     }
+    /// Set the `aria-pressed` state for toggle-style buttons.
+    pub fn pressed(mut self, p: bool) -> Self {
+        self.pressed = Some(p);
+        self
+    }
     /// Set the `aria-invalid` state. `None` (the default) means the attribute
     /// is not exposed; `Some(false)` explicitly marks a field as valid.
     pub fn invalid(mut self, invalid: bool) -> Self {
@@ -146,6 +151,14 @@ mod tests {
     fn invalid_state_defaults_to_absent() {
         let props = AriaProperties::new(AriaRole::Textbox, "value");
         assert_eq!(props.invalid, None);
+    }
+
+    #[test]
+    fn pressed_state_defaults_to_absent_and_can_be_set() {
+        let plain = AriaProperties::new(AriaRole::Button, "ok");
+        assert_eq!(plain.pressed, None);
+        let pressed = AriaProperties::new(AriaRole::Button, "ok").pressed(true);
+        assert_eq!(pressed.pressed, Some(true));
     }
 
     #[test]

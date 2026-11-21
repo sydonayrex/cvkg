@@ -117,6 +117,10 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **P2-2 Button pressed state:** `AriaProperties` gained a `pressed` builder
+  and `Button::aria_properties` now emits `aria-pressed` from VDOM state when
+  present. Core aria tests and the 124-test component suite pass.
+
 - **P2-2 Select ARIA state:** `Select::aria_properties` now reads live open
   and selected state from system state and emits `aria-expanded`, `value` and
   `aria-invalid` (plus the error description). Added a focused unit test;
