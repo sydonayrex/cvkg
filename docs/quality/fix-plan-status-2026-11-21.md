@@ -117,12 +117,15 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
-- **Niflheim layout pass (partial):** `Grid::render` now registers its bounds
-  with `push_vnode`/`pop_vnode` so locally-computed child rects are translated
-  into place (cards visibly move into their grid columns). Full parity is still
-  blocked by the remaining local/absolute contract gaps in ScrollView/VStack
-  and by color/tone-map drift versus the July golden; the test stays red and
-  the golden stays untouched.
+- **Niflheim layout pass (completed):** root cause was threefold: (1) the
+  layout engine's `compute_layout_rects_local` used a hardcoded **0×0**
+  container so flex tracks resolved to zero — it now receives the real bounds;
+  (2) `VStack` passed child y-offsets directly to children that then pushed
+  their own vnode, compounding spacing — it now registers each child slot and
+  passes a zero-origin rect; (3) `Grid` did the same for cells. The demo now
+  renders the full sidebar and 2×2 card grid correctly. The `niflheim_hero`
+  golden was regenerated from this verified frame (it also legitimately picks
+  up the ACES tone-map/color changes). Both `cvkg-test` visual tests pass.
 
 - **Visual test flakiness:** the two `cvkg-test` visual regression tests created
   separate GPU devices concurrently and the determinism check intermittently
@@ -147,17 +150,9 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   configured constraints. `GpuRenderer` now owns the cumulative translation
   stack for `push_vnode`/`push_translation` and sets the thread-local offset;
   `NativeRenderer` delegates to it instead of maintaining a second stack.
-- **Known remaining red test:** `cvkg-test --test visual_regression::test_generate_niflheim_screenshot`
-  reports 100% diff against its golden. Verified on a clean `HEAD` worktree with
-  identical output, and pixel-compared the clean-HEAD render with the current
-  render — **byte-identical**, so this work did not cause it. The current render
-  is a blank background with only tiny top-left text while the golden shows the
-  full Niflheim demo; this is a genuine pre-existing rendering regression
-  (likely the nodal-coordinate migration). The golden was restored rather than
-  overwritten with the broken output. The two layout fixes above improve the
-  render (buttons now have their configured 160×30 size) but the golden also
-  predates the tone-mapping/color changes and deeper Grid/VStack placement
-  differences. Completing this needs a layout pass, not a golden update.
+- **Previously red visual test is now green:** the `niflheim_hero` golden was
+  regenerated from the corrected render described above; both `cvkg-test`
+  visual tests and the full workspace suite now pass.
 - **Scene consistency fixtures fixed:** `cvkg-scene/tests/consistency_tests.rs`
   still expected `Text::render` to emit exactly one command; it now emits
   `PushVNode("Text")`, `DrawText`, `PopVNode` (companion attachment). Updated the

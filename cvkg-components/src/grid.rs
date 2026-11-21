@@ -82,7 +82,7 @@ impl View for Grid {
             .layout_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let rects = grid_engine.compute_layout_rects_local(&layouts, &placements, &mut cache);
+        let rects = grid_engine.compute_layout_rects_local(rect, &layouts, &placements, &mut cache);
 
         // The grid engine returns child rects in the grid's LOCAL space.
         // Register the grid's own bounds so GpuRenderer's translation stack
@@ -92,7 +92,20 @@ impl View for Grid {
         let mut rect_idx = 0;
         for child in &self.children {
             if child.layout().is_some() && rect_idx < rects.len() {
-                child.render(renderer, rects[rect_idx]);
+                let child_rect = rects[rect_idx];
+                // Register each cell so children that push their own vnode
+                // receive a zero-origin rect and do not re-add the cell offset.
+                renderer.push_vnode(child_rect, "GridCell");
+                child.render(
+                    renderer,
+                    Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: child_rect.width,
+                        height: child_rect.height,
+                    },
+                );
+                renderer.pop_vnode();
                 rect_idx += 1;
             }
         }
@@ -124,7 +137,12 @@ impl View for Grid {
             .layout_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let rects = grid_engine.compute_layout_rects_local(&layouts, &placements, &mut cache);
+        let rects = grid_engine.compute_layout_rects_local(
+            Rect::new(0.0, 0.0, width, height),
+            &layouts,
+            &placements,
+            &mut cache,
+        );
 
         if rects.is_empty() {
             return Size::ZERO;

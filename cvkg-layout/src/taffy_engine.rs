@@ -321,8 +321,16 @@ pub fn compute_taffy_flex(
         match engine.tree.layout(node) {
             Ok(layout) => {
                 let rect = Rect {
-                    x: if params.local_mode { layout.location.x } else { params.bounds.x + layout.location.x },
-                    y: if params.local_mode { layout.location.y } else { params.bounds.y + layout.location.y },
+                    x: if params.local_mode {
+                        layout.location.x
+                    } else {
+                        params.bounds.x + layout.location.x
+                    },
+                    y: if params.local_mode {
+                        layout.location.y
+                    } else {
+                        params.bounds.y + layout.location.y
+                    },
                     width: layout.size.width,
                     height: layout.size.height,
                 };
@@ -917,20 +925,19 @@ impl Grid {
     /// Opt-in counterpart of `compute_layout_rects`. See
     /// `docs/nodal-coordinate-migration.md` Phase 3 and
     /// `docs/nodal-coordinate-migration-status.md`.
+    /// Compute child rects in the container's local coordinate space.
+    ///
+    /// `bounds` supplies the ACTUAL container size for track resolution —
+    /// flex tracks cannot resolve against a zero-sized container. Returned
+    /// locations remain relative to the container origin.
     pub fn compute_layout_rects_local(
         &self,
+        bounds: Rect,
         subviews: &[&dyn LayoutView],
         placements: &[Option<cvkg_core::GridPlacement>],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        self.compute_layout_rects_incremental(
-            Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
-            0,
-            subviews,
-            placements,
-            cache,
-            true,
-        )
+        self.compute_layout_rects_incremental(bounds, 0, subviews, placements, cache, true)
     }
 
     /// Computes the rects for children based on track sizing and grid placements.
@@ -1018,12 +1025,18 @@ impl Grid {
                     let _ = engine.tree.set_style(existing, style);
                     existing
                 } else {
-                    let new_node = engine.tree.new_leaf(style).expect("taffy new_leaf failed (OOM)");
+                    let new_node = engine
+                        .tree
+                        .new_leaf(style)
+                        .expect("taffy new_leaf failed (OOM)");
                     engine.node_map.insert(*hash, new_node);
                     new_node
                 }
             } else {
-                engine.tree.new_leaf(style).expect("taffy new_leaf failed (OOM)")
+                engine
+                    .tree
+                    .new_leaf(style)
+                    .expect("taffy new_leaf failed (OOM)")
             };
             child_nodes.push(node);
         }
@@ -1091,8 +1104,16 @@ impl Grid {
                 }
             };
             rects.push(Rect {
-                x: if local_mode { layout.location.x } else { bounds.x + layout.location.x },
-                y: if local_mode { layout.location.y } else { bounds.y + layout.location.y },
+                x: if local_mode {
+                    layout.location.x
+                } else {
+                    bounds.x + layout.location.x
+                },
+                y: if local_mode {
+                    layout.location.y
+                } else {
+                    bounds.y + layout.location.y
+                },
                 width: layout.size.width,
                 height: layout.size.height,
             });

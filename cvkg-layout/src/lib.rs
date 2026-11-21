@@ -414,7 +414,12 @@ mod tests {
             }),
         ];
 
-        let rects = grid.compute_layout_rects_local(&views, &placements, &mut cache);
+        let rects = grid.compute_layout_rects_local(
+            Rect::new(0.0, 0.0, 210.0, 210.0),
+            &views,
+            &placements,
+            &mut cache,
+        );
 
         assert_eq!(rects.len(), 3);
         assert_eq!(

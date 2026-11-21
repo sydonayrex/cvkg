@@ -105,7 +105,21 @@ impl View for VStack {
         for child in self.children.iter() {
             if child.layout().is_some() && rect_idx < rects.len() {
                 let child_rect = rects[rect_idx];
-                child.render(renderer, child_rect);
+                // P2-2: register the child's slot on the translation stack and
+                // hand the child a zero-origin rect. Otherwise components that
+                // push their own vnode add child_rect.y a second time and the
+                // column spacing compounds.
+                renderer.push_vnode(child_rect, "VStackChild");
+                child.render(
+                    renderer,
+                    Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: child_rect.width,
+                        height: child_rect.height,
+                    },
+                );
+                renderer.pop_vnode();
                 rect_idx += 1;
             }
         }
