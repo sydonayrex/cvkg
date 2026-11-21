@@ -117,6 +117,9 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **P2-2 Tabs ARIA:** `BifrostTabs` now publishes its selected tab as the
+  tablist value; per-tab selected/panel semantics remain open.
+
 - **P2-2 RadioGroup ARIA:** the group now publishes `role=radiogroup` and the
   selected option as `value`/description. Unit test added.
 

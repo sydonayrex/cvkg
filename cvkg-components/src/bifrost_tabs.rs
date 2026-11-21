@@ -304,7 +304,13 @@ impl View for BifrostTabs {
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(AriaProperties::new(AriaRole::Tablist, "Tabs"))
+        // P2-2: publish the selected tab as the tablist's value so the active
+        // section is discoverable without reading pixel output.
+        let mut props = AriaProperties::new(AriaRole::Tablist, "Tabs");
+        if let Some(label) = self.options.get(self.selected_index) {
+            props = props.value(label.clone());
+        }
+        Some(props)
     }
 }
 
@@ -327,5 +333,20 @@ impl cvkg_core::LayoutView for BifrostTabs {
         _subviews: &mut [&mut dyn cvkg_core::LayoutView],
         _cache: &mut cvkg_core::LayoutCache,
     ) {
+    }
+}
+
+#[cfg(test)]
+mod aria_tests {
+    use super::*;
+
+    #[test]
+    fn tablist_publishes_selected_value() {
+        let tabs = BifrostTabs::new(vec!["Design".to_string(), "Code".to_string()], 1, |_| {});
+        let props = tabs
+            .aria_properties()
+            .expect("Tabs must publish aria properties");
+        assert_eq!(props.role, AriaRole::Tablist);
+        assert_eq!(props.value.as_deref(), Some("Code"));
     }
 }

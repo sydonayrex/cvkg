@@ -134,3 +134,10 @@ as `value` and the option description as ARIA description
 (`cvkg-components/src/radio_group.rs`, `aria_tests::radio_group_publishes_role_and_selected_value`).
 Per-item `radio` roles are still emitted through the existing `set_aria_role`
 path in `render`, not through the accessibility tree type.
+
+## Update 2026-11-21 — Tabs
+
+`BifrostTabs` now publishes `role=tablist` with the selected tab label as
+`value` (`bifrost_tabs::aria_tests::tablist_publishes_selected_value`).
+Per-tab `aria-selected`/`tabpanel` semantics are still not represented in the
+accessibility tree.
