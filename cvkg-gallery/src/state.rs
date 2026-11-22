@@ -1,7 +1,9 @@
 //! Gallery application state — shared across sidebar, canvas, toolbar, and commands.
 
-use cvkg_components::{Button, Dialog, HStack, Input, MimirSpotlight, Select, Slider, Text, Toggle, VStack};
 use cvkg_components::chrome::NiflheimSidebar;
+use cvkg_components::{
+    Button, Dialog, HStack, Input, MimirSpotlight, Select, Slider, Text, Toggle, VStack,
+};
 use cvkg_core::{AnyView, Color, Rect, Size, View};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -24,7 +26,12 @@ impl ComponentMeta {
         description: &'static str,
         factory: fn(&GalleryState) -> AnyView,
     ) -> Self {
-        Self { name, category, description, factory }
+        Self {
+            name,
+            category,
+            description,
+            factory,
+        }
     }
 }
 
@@ -72,11 +79,7 @@ pub enum ViewportPreset {
 }
 
 impl ViewportPreset {
-    pub const ALL: &'static [Self] = &[
-        Self::Desktop,
-        Self::Tablet,
-        Self::Mobile,
-    ];
+    pub const ALL: &'static [Self] = &[Self::Desktop, Self::Tablet, Self::Mobile];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -148,12 +151,17 @@ impl GalleryState {
     /// Get or create the global state instance.
     pub fn global() -> Arc<Mutex<GalleryState>> {
         static INSTANCE: OnceLock<Arc<Mutex<GalleryState>>> = OnceLock::new();
-        INSTANCE.get_or_init(|| Arc::new(Mutex::new(GalleryState::default()))).clone()
+        INSTANCE
+            .get_or_init(|| Arc::new(Mutex::new(GalleryState::default())))
+            .clone()
     }
 
     /// Toggle a sidebar category expanded state.
     pub fn toggle_category(&mut self, category: &str) {
-        let entry = self.expanded_categories.entry(category.to_string()).or_insert(true);
+        let entry = self
+            .expanded_categories
+            .entry(category.to_string())
+            .or_insert(true);
         *entry = !*entry;
     }
 
@@ -163,14 +171,22 @@ impl GalleryState {
         // Add to recent (max 5)
         if !self.recent.iter().any(|r| r == name) {
             self.recent.insert(0, name.to_string());
-            if self.recent.len() > 5 { self.recent.pop(); }
+            if self.recent.len() > 5 {
+                self.recent.pop();
+            }
         }
     }
 
     /// Log an event for the event log panel.
     pub fn log_event(&mut self, event: &str) {
-        self.event_log.push(format!("[{}] {}", chrono::Local::now().format("%H:%M:%S"), event));
-        if self.event_log.len() > 100 { self.event_log.remove(0); }
+        self.event_log.push(format!(
+            "[{}] {}",
+            chrono::Local::now().format("%H:%M:%S"),
+            event
+        ));
+        if self.event_log.len() > 100 {
+            self.event_log.remove(0);
+        }
     }
 
     /// Load persisted state from localStorage (via cvkg-native bridge).
@@ -221,12 +237,17 @@ impl GalleryState {
             let kv: Vec<&str> = pair.split('=').collect();
             if kv.len() == 2 {
                 match kv[0] {
-                    "comp" => state.selected_component = Some(urlencoding::decode(kv[1]).unwrap_or_default().into_owned()),
-                    "theme" => state.theme = match kv[1] {
-                        "Dark" => GalleryTheme::Dark,
-                        "HighContrast" => GalleryTheme::HighContrast,
-                        _ => GalleryTheme::Light,
-                    },
+                    "comp" => {
+                        state.selected_component =
+                            Some(urlencoding::decode(kv[1]).unwrap_or_default().into_owned())
+                    }
+                    "theme" => {
+                        state.theme = match kv[1] {
+                            "Dark" => GalleryTheme::Dark,
+                            "HighContrast" => GalleryTheme::HighContrast,
+                            _ => GalleryTheme::Light,
+                        }
+                    }
                     "scale" => {
                         if let Ok(v) = kv[1].parse::<u32>() {
                             state.scale = match v {
@@ -264,140 +285,157 @@ impl Registry {
         vec![
             // Forms
             ComponentMeta::new(
-                "Button", "Forms", "Interactive button with variants and states",
-                |_| AnyView::new(crate::canvas::ButtonShowcase)
+                "Button",
+                "Forms",
+                "Interactive button with variants and states",
+                |_| AnyView::new(crate::canvas::ButtonShowcase),
             ),
             ComponentMeta::new(
-                "Checkbox", "Forms", "Checkbox with label and indeterminate state",
-                |_| AnyView::new(crate::canvas::CheckboxShowcase)
+                "Checkbox",
+                "Forms",
+                "Checkbox with label and indeterminate state",
+                |_| AnyView::new(crate::canvas::CheckboxShowcase),
             ),
             ComponentMeta::new(
-                "Input", "Forms", "Text input with validation and states",
-                |_| AnyView::new(crate::canvas::InputShowcase)
+                "Input",
+                "Forms",
+                "Text input with validation and states",
+                |_| AnyView::new(crate::canvas::InputShowcase),
             ),
+            ComponentMeta::new("Select", "Forms", "Dropdown select with search", |_| {
+                AnyView::new(crate::canvas::SelectShowcase)
+            }),
+            ComponentMeta::new("Toggle", "Forms", "Animated toggle switch", |_| {
+                AnyView::new(crate::canvas::ToggleShowcase)
+            }),
+            ComponentMeta::new("Slider", "Forms", "Range slider with marks", |_| {
+                AnyView::new(crate::canvas::SliderShowcase)
+            }),
+            ComponentMeta::new("DatePicker", "Forms", "Date picker with calendar", |_| {
+                AnyView::new(crate::canvas::DatePickerShowcase)
+            }),
             ComponentMeta::new(
-                "Select", "Forms", "Dropdown select with search",
-                |_| AnyView::new(crate::canvas::SelectShowcase)
+                "SearchField",
+                "Forms",
+                "Search input with suggestions",
+                |_| AnyView::new(crate::canvas::SearchFieldShowcase),
             ),
-            ComponentMeta::new(
-                "Toggle", "Forms", "Animated toggle switch",
-                |_| AnyView::new(crate::canvas::ToggleShowcase)
-            ),
-            ComponentMeta::new(
-                "Slider", "Forms", "Range slider with marks",
-                |_| AnyView::new(crate::canvas::SliderShowcase)
-            ),
-            ComponentMeta::new(
-                "DatePicker", "Forms", "Date picker with calendar",
-                |_| AnyView::new(crate::canvas::DatePickerShowcase)
-            ),
-            ComponentMeta::new(
-                "SearchField", "Forms", "Search input with suggestions",
-                |_| AnyView::new(crate::canvas::SearchFieldShowcase)
-            ),
-
             // Overlays
+            ComponentMeta::new("Dialog", "Overlays", "Modal dialog with actions", |_| {
+                AnyView::new(crate::canvas::DialogShowcase)
+            }),
             ComponentMeta::new(
-                "Dialog", "Overlays", "Modal dialog with actions",
-                |_| AnyView::new(crate::canvas::DialogShowcase)
+                "Popover",
+                "Overlays",
+                "Floating popover anchored to trigger",
+                |_| AnyView::new(crate::canvas::PopoverShowcase),
             ),
             ComponentMeta::new(
-                "Popover", "Overlays", "Floating popover anchored to trigger",
-                |_| AnyView::new(crate::canvas::PopoverShowcase)
+                "Tooltip",
+                "Overlays",
+                "Hover tooltip with positioning",
+                |_| AnyView::new(crate::canvas::TooltipShowcase),
             ),
             ComponentMeta::new(
-                "Tooltip", "Overlays", "Hover tooltip with positioning",
-                |_| AnyView::new(crate::canvas::TooltipShowcase)
+                "ContextMenu",
+                "Overlays",
+                "Right-click context menu",
+                |_| AnyView::new(crate::canvas::ContextMenuShowcase),
             ),
-            ComponentMeta::new(
-                "ContextMenu", "Overlays", "Right-click context menu",
-                |_| AnyView::new(crate::canvas::ContextMenuShowcase)
-            ),
-
             // Layout
+            ComponentMeta::new("VStack", "Layout", "Vertical stack with alignment", |_| {
+                AnyView::new(crate::canvas::VStackShowcase)
+            }),
             ComponentMeta::new(
-                "VStack", "Layout", "Vertical stack with alignment",
-                |_| AnyView::new(crate::canvas::VStackShowcase)
+                "HStack",
+                "Layout",
+                "Horizontal stack with alignment",
+                |_| AnyView::new(crate::canvas::HStackShowcase),
             ),
-            ComponentMeta::new(
-                "HStack", "Layout", "Horizontal stack with alignment",
-                |_| AnyView::new(crate::canvas::HStackShowcase)
-            ),
-            ComponentMeta::new(
-                "Grid", "Layout", "Responsive grid layout",
-                |_| AnyView::new(crate::canvas::GridShowcase)
-            ),
-            ComponentMeta::new(
-                "Divider", "Layout", "Visual separator",
-                |_| AnyView::new(crate::canvas::DividerShowcase)
-            ),
-
+            ComponentMeta::new("Grid", "Layout", "Responsive grid layout", |_| {
+                AnyView::new(crate::canvas::GridShowcase)
+            }),
+            ComponentMeta::new("Divider", "Layout", "Visual separator", |_| {
+                AnyView::new(crate::canvas::DividerShowcase)
+            }),
             // Data Display
             ComponentMeta::new(
-                "Table", "Data Display", "Sortable, selectable data table",
-                |_| AnyView::new(crate::canvas::TableShowcase)
+                "Table",
+                "Data Display",
+                "Sortable, selectable data table",
+                |_| AnyView::new(crate::canvas::TableShowcase),
+            ),
+            ComponentMeta::new("Badge", "Data Display", "Status badges and labels", |_| {
+                AnyView::new(crate::canvas::BadgeShowcase)
+            }),
+            ComponentMeta::new(
+                "Avatar",
+                "Data Display",
+                "User avatar with fallback",
+                |_| AnyView::new(crate::canvas::AvatarShowcase),
             ),
             ComponentMeta::new(
-                "Badge", "Data Display", "Status badges and labels",
-                |_| AnyView::new(crate::canvas::BadgeShowcase)
+                "Progress",
+                "Data Display",
+                "Progress bars and spinners",
+                |_| AnyView::new(crate::canvas::ProgressShowcase),
             ),
-            ComponentMeta::new(
-                "Avatar", "Data Display", "User avatar with fallback",
-                |_| AnyView::new(crate::canvas::AvatarShowcase)
-            ),
-            ComponentMeta::new(
-                "Progress", "Data Display", "Progress bars and spinners",
-                |_| AnyView::new(crate::canvas::ProgressShowcase)
-            ),
-
             // Feedback
-            ComponentMeta::new(
-                "Toast", "Feedback", "Transient notifications",
-                |_| AnyView::new(crate::canvas::ToastShowcase)
-            ),
-            ComponentMeta::new(
-                "Alert", "Feedback", "Inline alert messages",
-                |_| AnyView::new(crate::canvas::AlertShowcase)
-            ),
-            ComponentMeta::new(
-                "Skeleton", "Feedback", "Loading placeholders",
-                |_| AnyView::new(crate::canvas::SkeletonShowcase)
-            ),
-
+            ComponentMeta::new("Toast", "Feedback", "Transient notifications", |_| {
+                AnyView::new(crate::canvas::ToastShowcase)
+            }),
+            ComponentMeta::new("Alert", "Feedback", "Inline alert messages", |_| {
+                AnyView::new(crate::canvas::AlertShowcase)
+            }),
+            ComponentMeta::new("Skeleton", "Feedback", "Loading placeholders", |_| {
+                AnyView::new(crate::canvas::SkeletonShowcase)
+            }),
             // Navigation
+            ComponentMeta::new("Tabs", "Navigation", "Tab navigation with panels", |_| {
+                AnyView::new(crate::canvas::TabsShowcase)
+            }),
             ComponentMeta::new(
-                "Tabs", "Navigation", "Tab navigation with panels",
-                |_| AnyView::new(crate::canvas::TabsShowcase)
+                "Breadcrumb",
+                "Navigation",
+                "Hierarchical breadcrumb trail",
+                |_| AnyView::new(crate::canvas::BreadcrumbShowcase),
             ),
             ComponentMeta::new(
-                "Breadcrumb", "Navigation", "Hierarchical breadcrumb trail",
-                |_| AnyView::new(crate::canvas::BreadcrumbShowcase)
+                "Pagination",
+                "Navigation",
+                "Page navigation controls",
+                |_| AnyView::new(crate::canvas::PaginationShowcase),
             ),
-            ComponentMeta::new(
-                "Pagination", "Navigation", "Page navigation controls",
-                |_| AnyView::new(crate::canvas::PaginationShowcase)
-            ),
-
             // Advanced
             ComponentMeta::new(
-                "ColorPicker", "Advanced", "Color picker with multiple formats",
-                |_| AnyView::new(crate::canvas::ColorPickerShowcase)
+                "ColorPicker",
+                "Advanced",
+                "Color picker with multiple formats",
+                |_| AnyView::new(crate::canvas::ColorPickerShowcase),
             ),
             ComponentMeta::new(
-                "CommandPalette", "Advanced", "Full command palette (MimirSpotlight)",
-                |_| AnyView::new(crate::canvas::CommandPaletteShowcase)
+                "CommandPalette",
+                "Advanced",
+                "Full command palette (MimirSpotlight)",
+                |_| AnyView::new(crate::canvas::CommandPaletteShowcase),
             ),
             ComponentMeta::new(
-                "Sidebar", "Advanced", "Collapsible navigation sidebar (NiflheimSidebar)",
-                |_| AnyView::new(crate::canvas::SidebarShowcase)
+                "Sidebar",
+                "Advanced",
+                "Collapsible navigation sidebar (NiflheimSidebar)",
+                |_| AnyView::new(crate::canvas::SidebarShowcase),
             ),
             ComponentMeta::new(
-                "DockingWorkspace", "Advanced", "Docking workspace with panels and split panes",
-                |_| AnyView::new(crate::canvas::DockingWorkspaceShowcase)
+                "DockingWorkspace",
+                "Advanced",
+                "Docking workspace with panels and split panes",
+                |_| AnyView::new(crate::canvas::DockingWorkspaceShowcase),
             ),
             ComponentMeta::new(
-                "VirtualList", "Advanced", "Virtualized list for large datasets",
-                |_| AnyView::new(crate::canvas::VirtualListShowcase)
+                "VirtualList",
+                "Advanced",
+                "Virtualized list for large datasets",
+                |_| AnyView::new(crate::canvas::VirtualListShowcase),
             ),
         ]
     }
@@ -413,6 +451,8 @@ impl Registry {
 
     /// Find a component by name.
     pub fn find(name: &str) -> Option<ComponentMeta> {
-        Self::all().into_iter().find(|m| m.name.eq_ignore_ascii_case(name))
+        Self::all()
+            .into_iter()
+            .find(|m| m.name.eq_ignore_ascii_case(name))
     }
 }

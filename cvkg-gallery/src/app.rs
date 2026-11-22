@@ -1,9 +1,8 @@
 //! Gallery application definition
 
-use super::{sidebar, canvas, state, spotlight, props_panel, docs_panel};
+use super::{canvas, docs_panel, props_panel, sidebar, spotlight, state};
 use cvkg_core::{Rect, Renderer, Size, ThemeContext, View};
 use std::sync::{Arc, Mutex};
-
 
 /// Main gallery application.
 #[derive(Clone)]
@@ -21,7 +20,7 @@ impl GalleryApp {
     /// Creates a new main gallery application view.
     pub fn new() -> Self {
         let state = state::GalleryState::global();
-        
+
         let on_select = {
             let state = state.clone();
             move |name: &str| {
@@ -32,7 +31,7 @@ impl GalleryApp {
 
         let sidebar = sidebar::GallerySidebar::new(state.clone(), on_select);
         let canvas = canvas::GalleryCanvas::new(state.clone());
-        
+
         let on_theme_change = {
             let state = state.clone();
             move |theme| {
@@ -40,7 +39,7 @@ impl GalleryApp {
                 s.theme = theme;
             }
         };
-        
+
         let on_scale_change = {
             let state = state.clone();
             move |scale| {
@@ -48,7 +47,7 @@ impl GalleryApp {
                 s.scale = scale;
             }
         };
-        
+
         let on_bg_change = {
             let state = state.clone();
             move |bg| {
@@ -56,7 +55,7 @@ impl GalleryApp {
                 s.canvas_bg = bg;
             }
         };
-        
+
         let on_viewport_change = {
             let state = state.clone();
             move |viewport| {
@@ -91,7 +90,9 @@ impl GalleryApp {
 
 impl View for GalleryApp {
     type Body = cvkg_core::Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Apply gallery theme to the thread-local theme context so that all
@@ -139,7 +140,7 @@ impl View for GalleryApp {
         // │                  ├──────────────────────────────────────────┤
         // │                  │ Bottom Panels (Props + Docs side-by-side)│
         // └──────────────────┴──────────────────────────────────────────┘
-        
+
         // 1. Sidebar spans full height on the left
         let sidebar_rect = Rect {
             x: rect.x,
@@ -190,8 +191,6 @@ impl View for GalleryApp {
             height: bottom_height,
         };
 
-
-
         // Render sidebar — dark navy panel on the left.
         // WHY this color: visually distinct from the aurora red gradient to confirm the
         // fill renders at the correct position. Chosen to contrast without jarring contrast.
@@ -200,28 +199,32 @@ impl View for GalleryApp {
 
         // Render toolbar
         self.toolbar.render(renderer, toolbar_rect);
-        
+
         // Render canvas
         self.canvas.render(renderer, canvas_rect);
-        
+
         // Render props panel
         self.props_panel.render(renderer, props_panel_rect);
-        
+
         // Render docs panel
         self.docs_panel.render(renderer, docs_panel_rect);
-        
+
         // Render spotlight overlay if open
         let spotlight_open = {
             let state = self.state.lock().unwrap();
             state.spotlight_open
         };
-        
+
         if spotlight_open {
             self.spotlight.render(renderer, rect);
         }
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> Size {
         Size {
             width: proposal.width.unwrap_or(1280.0),
             height: proposal.height.unwrap_or(720.0),

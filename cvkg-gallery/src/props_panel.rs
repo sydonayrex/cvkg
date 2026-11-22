@@ -1,8 +1,10 @@
 //! Props panel — type-aware editors for live component manipulation.
 
-use crate::state::{GalleryState, Registry, ComponentMeta};
-use cvkg_components::{Button, CodeEditor, Divider, HStack, Input, Select, Slider, Text, Toggle, VStack};
-use cvkg_core::{Rect, Renderer, View, Size, SizeProposal, AnyView};
+use crate::state::{ComponentMeta, GalleryState, Registry};
+use cvkg_components::{
+    Button, CodeEditor, Divider, HStack, Input, Select, Slider, Text, Toggle, VStack,
+};
+use cvkg_core::{AnyView, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::{Arc, Mutex};
 
 /// Props panel showing editable properties for the selected component.
@@ -18,7 +20,10 @@ impl PropsPanel {
 
     fn get_selected_meta(&self) -> Option<ComponentMeta> {
         let state = self.state.lock().unwrap();
-        state.selected_component.as_ref().and_then(|name| Registry::find(name))
+        state
+            .selected_component
+            .as_ref()
+            .and_then(|name| Registry::find(name))
     }
 
     fn get_prop_value(&self, prop_name: &str) -> Option<String> {
@@ -66,14 +71,23 @@ impl PropsPanel {
 
 impl View for PropsPanel {
     type Body = cvkg_core::Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let meta = self.get_selected_meta();
 
         // Panel background
         renderer.fill_rect(rect, [0.98, 0.98, 0.98, 1.0]);
-        renderer.draw_line(rect.x, rect.y, rect.x + rect.width, rect.y, [0.7, 0.7, 0.7, 1.0], 1.0);
+        renderer.draw_line(
+            rect.x,
+            rect.y,
+            rect.x + rect.width,
+            rect.y,
+            [0.7, 0.7, 0.7, 1.0],
+            1.0,
+        );
 
         let mut y = rect.y + 16.0;
         let pad = 16.0;
@@ -102,7 +116,14 @@ impl View for PropsPanel {
             y += 24.0;
 
             // Divider
-            renderer.draw_line(rect.x + pad, y, rect.x + rect.width - pad, y, [0.7, 0.7, 0.7, 1.0], 1.0);
+            renderer.draw_line(
+                rect.x + pad,
+                y,
+                rect.x + rect.width - pad,
+                y,
+                [0.7, 0.7, 0.7, 1.0],
+                1.0,
+            );
             y += 16.0;
 
             // Properties for this component type
@@ -131,7 +152,12 @@ impl View for PropsPanel {
                 // Editor based on type
                 let editor_x = rect.x + pad + label_w;
                 let editor_w = rect.width - pad * 2.0 - label_w - 60.0;
-                let editor_rect = Rect { x: editor_x, y: y, width: editor_w, height: field_h };
+                let editor_rect = Rect {
+                    x: editor_x,
+                    y: y,
+                    width: editor_w,
+                    height: field_h,
+                };
 
                 match prop_type {
                     "string" => {
@@ -156,7 +182,8 @@ impl View for PropsPanel {
                         slider.render(renderer, editor_rect);
                     }
                     "enum" => {
-                        let options: Vec<String> = default.split(',').map(|s| s.trim().into()).collect();
+                        let options: Vec<String> =
+                            default.split(',').map(|s| s.trim().into()).collect();
                         let selected_idx = options.iter().position(|o| o == &val).unwrap_or(0);
                         let mut select = Select::new("Select...");
                         for (idx, opt) in options.iter().enumerate() {
@@ -190,7 +217,10 @@ impl View for PropsPanel {
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
-        Size { width: proposal.width.unwrap_or(300.0), height: proposal.height.unwrap_or(600.0) }
+        Size {
+            width: proposal.width.unwrap_or(300.0),
+            height: proposal.height.unwrap_or(600.0),
+        }
     }
 }
 
@@ -201,7 +231,10 @@ impl cvkg_core::layout::LayoutView for PropsPanel {
         _subviews: &[&dyn cvkg_core::layout::LayoutView],
         _cache: &mut cvkg_core::layout::LayoutCache,
     ) -> Size {
-        Size { width: proposal.width.unwrap_or(300.0), height: proposal.height.unwrap_or(600.0) }
+        Size {
+            width: proposal.width.unwrap_or(300.0),
+            height: proposal.height.unwrap_or(600.0),
+        }
     }
 
     fn place_subviews(
@@ -209,7 +242,8 @@ impl cvkg_core::layout::LayoutView for PropsPanel {
         _bounds: Rect,
         _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
         _cache: &mut cvkg_core::layout::LayoutCache,
-    ) {}
+    ) {
+    }
 }
 
 impl PropsPanel {
@@ -224,23 +258,39 @@ impl PropsPanel {
             "Input" => vec![
                 ("placeholder", "string", "Enter text..."),
                 ("value", "string", ""),
-                ("on_change", "callback", "// fn(String) { println!(\"changed\"); }"),
+                (
+                    "on_change",
+                    "callback",
+                    "// fn(String) { println!(\"changed\"); }",
+                ),
             ],
             "Toggle" => vec![
                 ("label", "string", "Enable"),
                 ("is_on", "bool", "false"),
-                ("on_change", "callback", "// fn(bool) { println!(\"toggled\"); }"),
+                (
+                    "on_change",
+                    "callback",
+                    "// fn(bool) { println!(\"toggled\"); }",
+                ),
             ],
             "Slider" => vec![
                 ("min", "number", "0,100"),
                 ("max", "number", "0,100"),
                 ("value", "number", "50"),
-                ("on_change", "callback", "// fn(f32) { println!(\"slider\"); }"),
+                (
+                    "on_change",
+                    "callback",
+                    "// fn(f32) { println!(\"slider\"); }",
+                ),
             ],
             "Select" => vec![
                 ("options", "enum", "Option A,Option B,Option C"),
                 ("selected", "number", "0"),
-                ("on_change", "callback", "// fn(usize) { println!(\"selected\"); }"),
+                (
+                    "on_change",
+                    "callback",
+                    "// fn(usize) { println!(\"selected\"); }",
+                ),
             ],
             _ => vec![],
         }

@@ -2,7 +2,7 @@
 
 use crate::state::{GalleryState, Registry};
 use cvkg_components::chrome::{NiflheimSidebar, SidebarItem, SidebarVibrancy};
-use cvkg_core::{Rect, Renderer, View, Size, SizeProposal};
+use cvkg_core::{Rect, Renderer, Size, SizeProposal, View};
 use std::sync::{Arc, Mutex};
 
 /// Sidebar panel showing component categories.
@@ -47,9 +47,7 @@ impl GallerySidebar {
                         .iter()
                         .map(|c| {
                             let is_selected = selected.as_ref() == Some(&c.name.to_string());
-                            SidebarItem::new(c.name, c.name)
-                                .icon("")
-                                .children(vec![])
+                            SidebarItem::new(c.name, c.name).icon("").children(vec![])
                         })
                         .collect();
 
