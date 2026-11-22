@@ -1,5 +1,4 @@
 # Approved zero-caller exceptions. Remove an entry once it has a caller.
 IS_BATCHING
 notify_conflict
-set_prop_value
 validate_light_source

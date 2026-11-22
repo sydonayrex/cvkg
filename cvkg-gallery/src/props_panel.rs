@@ -140,7 +140,11 @@ impl View for PropsPanel {
                     }
                     "bool" => {
                         let is_on = val == "true";
-                        let toggle = Toggle::new(prop_name, is_on, |_| {});
+                        let panel = self.clone();
+                        let field = prop_name.to_string();
+                        let toggle = Toggle::new(prop_name, is_on, move |on| {
+                            panel.set_prop_value(&field, on.to_string());
+                        });
                         toggle.render(renderer, editor_rect);
                     }
                     "number" => {

@@ -111,20 +111,15 @@ impl AssetServer {
     /// 
     /// # Invariant
     /// Watched path triggers on_asset_changed within 500ms + debounce.
-    pub fn watch_gltf<P: AsRef<Path>>(&self, path: P) {
+    pub fn watch_gltf<P: AsRef<Path>>(
+        &self,
+        path: P,
+        listener: Box<dyn AssetHotReloadListener>,
+    ) {
         let path_buf = path.as_ref().to_path_buf();
         let mut listeners = self.listeners.lock().unwrap();
-        // File extension filter stored in path; listener will handle type dispatch
-        listeners.entry(path_buf).or_default().push(
-            Box::new(NullListener) // Placeholder - actual listener set by caller
-        );
+        listeners.entry(path_buf).or_default().push(listener);
     }
-}
-
-/// Null listener for type-erased storage - actual callback provided by scene
-struct NullListener;
-impl AssetHotReloadListener for NullListener {
-    fn on_asset_changed(&self, _path: &Path) {}
 }
 
 #[cfg(test)]
@@ -162,9 +157,10 @@ mod tests {
     fn watch_gltf_accepts_glb_path() {
         let server = AssetServer::new();
         let path = PathBuf::from("assets/scene.glb");
-        
+        let called = Arc::new(AtomicBool::new(false));
+
         // Should not panic - adds to watched paths
-        server.watch_gltf(&path);
+        server.watch_gltf(&path, Box::new(TestListener { called: called.clone() }));
         
         // Verify path is registered (internal check)
         let listeners = server.listeners.lock().unwrap();

@@ -27,15 +27,21 @@ impl AssetManager for DefaultAssetManager {
             return state.clone();
         }
 
+        let state = match std::fs::read(url) {
+            Ok(bytes) => AssetState::Ready(Arc::new(bytes)),
+            Err(error) => AssetState::Error(format!("cannot load {url}: {error}")),
+        };
         self.cache.rcu(|map| {
             let mut m = (**map).clone();
-            m.entry(url.to_string()).or_insert(AssetState::Loading);
+            m.insert(url.to_string(), state.clone());
             m
         });
-        AssetState::Loading
+        state
     }
 
-    fn preload_image(&self, _url: &str) {}
+    fn preload_image(&self, url: &str) {
+        let _ = self.load_image(url);
+    }
 }
 
 use std::future::Future;

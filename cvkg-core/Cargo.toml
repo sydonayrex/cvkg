@@ -108,6 +108,14 @@ name = "input_dispatch"
 path = "tests/input_dispatch.rs"
 
 [[test]]
+name = "default_asset_manager_tests"
+path = "tests/default_asset_manager_tests.rs"
+
+[[test]]
+name = "asset_hot_reload_tests"
+path = "tests/asset_hot_reload_tests.rs"
+
+[[test]]
 name = "action_dispatch"
 path = "tests/action_dispatch.rs"
 
