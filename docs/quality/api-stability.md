@@ -1,5 +1,7 @@
 # Public API stability and versioning policy
 
+Release mechanics live in `docs/quality/release-policy.md`.
+
 Status: adopted for the 0.3.x line (2026-11-22). Applies to every crate in the workspace.
 
 ## Version scheme

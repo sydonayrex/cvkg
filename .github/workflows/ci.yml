@@ -44,6 +44,9 @@ jobs:
         key: ${{ runner.os }}-cargo-ci-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: ${{ runner.os }}-cargo-ci-
 
+    - name: Verify release pins
+      run: python3 scripts/check_version_pins.py
+
     - name: cargo check --workspace
       run: cargo check --workspace
 
