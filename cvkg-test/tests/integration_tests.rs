@@ -1,5 +1,7 @@
 #![allow(clippy::assertions_on_constants)]
 
+mod common;
+
 // Backend Integration Tests
 // Testing Native, Web, and GPU renderer integration
 
@@ -23,6 +25,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_gpu_renderer_integration() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_gpu_renderer_integration: no adapter within 5s");
+        return;
+    }
         // Verify we can at least attempt to forge a headless renderer
         let _ = GpuRenderer::forge_headless(100, 100).await;
         assert!(true);

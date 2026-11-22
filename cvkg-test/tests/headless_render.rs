@@ -1,8 +1,15 @@
+mod common;
+
 use cvkg_core::{FrameRenderer, Rect, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 
 #[tokio::test]
 async fn test_headless_render_capture() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_headless_render_capture: no adapter within 5s");
+        return;
+    }
     let _ = env_logger::try_init();
     let width = 128;
     let height = 128;

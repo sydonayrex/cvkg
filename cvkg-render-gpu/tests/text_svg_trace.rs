@@ -1,3 +1,5 @@
+mod common;
+
 use cvkg_core::{FrameRenderer, Rect, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 
@@ -8,6 +10,11 @@ fn capture_frame(renderer: &mut GpuRenderer) -> Vec<u8> {
 
 #[test]
 fn test_text_svg_rendering_trace() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_text_svg_rendering_trace: no adapter within 5s");
+        return;
+    }
     let _ = env_logger::try_init();
     let width: u32 = 256;
     let height: u32 = 256;

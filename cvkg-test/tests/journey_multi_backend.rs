@@ -1,5 +1,7 @@
 #![allow(clippy::assertions_on_constants)]
 
+mod common;
+
 use cvkg_components::ValkyrieIndicator;
 use cvkg_core::{FrameRenderer, Rect, View};
 use cvkg_render_gpu::GpuRenderer;
@@ -7,6 +9,11 @@ use cvkg_render_gpu::GpuRenderer;
 
 #[tokio::test]
 async fn test_journey_web_backend_stub() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_journey_web_backend_stub: no adapter within 5s");
+        return;
+    }
     let _web_renderer = GpuRenderer::forge_headless(800, 600).await;
 
     // On non-wasm32, this should be Tier1GPU
@@ -21,6 +28,11 @@ async fn test_journey_web_backend_stub() {
 
 #[tokio::test]
 async fn test_journey_native_backend_initialization() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_journey_native_backend_initialization: no adapter within 5s");
+        return;
+    }
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(2),
         GpuRenderer::forge_headless(100, 100),

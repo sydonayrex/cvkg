@@ -305,6 +305,18 @@ pub fn install_input_handlers(_canvas_id: &str) -> Result<(), String> {
     Err("DOM input is only available on wasm32".to_string())
 }
 
+/// Apply text committed through the offscreen DOM text proxy. Keeps the
+/// canvas text buffer (and therefore the rendered caret/text) in sync with
+/// IME and assistive-technology input.
+pub fn apply_proxy_text(value: &str) {
+    INPUT_STATE.with(|slot| {
+        let mut state = slot.borrow_mut();
+        state.text = value.to_string();
+        state.caret = value.chars().count();
+        state.last_action = "proxy_input".to_string();
+    });
+}
+
 /// Snapshot of the current input state as a JSON string (for tests/debugging).
 pub fn input_state_json() -> String {
     current_state().to_json()
@@ -343,6 +355,15 @@ pub fn input_state_json_js() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn proxy_text_updates_canvas_state() {
+        super::apply_proxy_text("hello");
+        let state = super::INPUT_STATE.with(|slot| slot.borrow().clone());
+        assert_eq!(state.text, "hello");
+        assert_eq!(state.caret, 5);
+        assert_eq!(state.last_action, "proxy_input");
+    }
 
     #[test]
     fn modifier_labels_are_stable() {

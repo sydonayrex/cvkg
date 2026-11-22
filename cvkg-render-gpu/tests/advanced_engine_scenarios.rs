@@ -1,3 +1,5 @@
+mod common;
+
 use cvkg_core::{Event, FrameRenderer, KvasirId, Rect, Renderer};
 use cvkg_core::{SpringParams, SpringSolver};
 use cvkg_render_gpu::GpuRenderer;
@@ -47,6 +49,11 @@ fn count_matching_pixels(
 
 #[test]
 fn test_advanced_vdom_with_glassmorphism() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_advanced_vdom_with_glassmorphism: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -174,6 +181,11 @@ fn test_advanced_vdom_with_glassmorphism() {
 
 #[test]
 fn test_advanced_particles_and_springs() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_advanced_particles_and_springs: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -232,6 +244,11 @@ fn test_advanced_particles_and_springs() {
 
 #[test]
 fn test_advanced_volumetric_raymarching() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_advanced_volumetric_raymarching: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -295,6 +312,11 @@ fn test_advanced_volumetric_raymarching() {
 
 #[test]
 fn test_advanced_path_tracing_pass() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_advanced_path_tracing_pass: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));

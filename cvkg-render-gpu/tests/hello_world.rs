@@ -7,6 +7,8 @@
 //! - Performance: frame time budgets, draw call counts, vertex counts
 //! - Correctness: pixel-exact validation of rendered output
 
+mod common;
+
 use cvkg_core::{FrameRenderer, Rect, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 
@@ -45,6 +47,11 @@ fn count_matching_pixels(
 /// Test: Opaque quad renders correctly through the full pipeline.
 #[test]
 fn test_opaque_quad_renders_correctly() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_opaque_quad_renders_correctly: no adapter within 5s");
+        return;
+    }
     let width: u32 = 128;
     let height: u32 = 128;
 
@@ -85,6 +92,11 @@ fn test_opaque_quad_renders_correctly() {
 /// Test: Multiple overlapping quads blend correctly.
 #[test]
 fn test_alpha_blending() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_alpha_blending: no adapter within 5s");
+        return;
+    }
     let width: u32 = 128;
     let height: u32 = 128;
 
@@ -134,6 +146,11 @@ fn test_alpha_blending() {
 /// Previously broken (black output), now fixed in v0.2.13.
 #[test]
 fn test_glass_pipeline_renders() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_glass_pipeline_renders: no adapter within 5s");
+        return;
+    }
     let width: u32 = 256;
     let height: u32 = 256;
 
@@ -194,6 +211,11 @@ fn test_glass_pipeline_renders() {
 /// Test: Bloom pipeline produces visible glow effect.
 #[test]
 fn test_bloom_pipeline() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_bloom_pipeline: no adapter within 5s");
+        return;
+    }
     let width: u32 = 128;
     let height: u32 = 128;
 
@@ -235,6 +257,11 @@ fn test_bloom_pipeline() {
 /// This test draws a background + glass rect and checks each step.
 #[test]
 fn test_glass_pipeline_debug() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_glass_pipeline_debug: no adapter within 5s");
+        return;
+    }
     let _ = env_logger::try_init();
     let width: u32 = 128;
     let height: u32 = 128;
@@ -322,6 +349,11 @@ fn test_glass_pipeline_debug() {
 /// Test: Render graph executes all expected passes.
 #[test]
 fn test_render_graph_execution() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_render_graph_execution: no adapter within 5s");
+        return;
+    }
     let width: u32 = 64;
     let height: u32 = 64;
 
@@ -357,6 +389,11 @@ fn test_render_graph_execution() {
 /// Test: Frame time stays within budget (60 FPS target).
 #[test]
 fn test_frame_time_budget() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_frame_time_budget: no adapter within 5s");
+        return;
+    }
     let width: u32 = 256;
     let height: u32 = 256;
 
@@ -404,6 +441,11 @@ fn test_frame_time_budget() {
 /// Test: Draw call count scales linearly with draw calls.
 #[test]
 fn test_draw_call_efficiency() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_draw_call_efficiency: no adapter within 5s");
+        return;
+    }
     let width: u32 = 128;
     let height: u32 = 128;
 
@@ -438,6 +480,11 @@ fn test_draw_call_efficiency() {
 /// Test: Vertex count matches expected geometry.
 #[test]
 fn test_vertex_count() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_vertex_count: no adapter within 5s");
+        return;
+    }
     let width: u32 = 64;
     let height: u32 = 64;
 
@@ -474,6 +521,11 @@ fn test_vertex_count() {
 /// Test: Many draw calls don't crash or produce invalid output.
 #[test]
 fn test_many_draw_calls() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_many_draw_calls: no adapter within 5s");
+        return;
+    }
     let width: u32 = 256;
     let height: u32 = 256;
 
@@ -514,6 +566,11 @@ fn test_many_draw_calls() {
 /// NOTE: Glass is excluded until the glass pipeline bug is fixed.
 #[test]
 fn test_full_pipeline_integration() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_full_pipeline_integration: no adapter within 5s");
+        return;
+    }
     let width: u32 = 256;
     let height: u32 = 256;
 
@@ -607,6 +664,11 @@ fn test_color_theme_struct_layout() {
 /// Regression: Glass pipeline must be creatable without panicking.
 #[test]
 fn test_glass_pipeline_is_valid() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_glass_pipeline_is_valid: no adapter within 5s");
+        return;
+    }
     let width: u32 = 64;
     let height: u32 = 64;
 
@@ -640,6 +702,11 @@ fn test_glass_pipeline_is_valid() {
 /// implementation caches and replays the GPU buffers/draw calls correctly.
 #[test]
 fn test_memoize_replays_cached_draw_calls_on_skip() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_memoize_replays_cached_draw_calls_on_skip: no adapter within 5s");
+        return;
+    }
     use std::sync::atomic::{AtomicUsize, Ordering};
     static RENDER_COUNT: AtomicUsize = AtomicUsize::new(0);
 

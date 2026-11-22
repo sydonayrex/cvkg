@@ -315,3 +315,73 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
 5. **P0-1 completion:** gate `cvkg-gallery` behind a `dev-demo` feature so core
    crate lint rules can exclude demo-only panics, then finish the remaining
    low-priority unwrap sites in `cvkg-anim` and `cvkg-render-native`.
+
+## Continuation 2026-11-22
+
+- **Audit fixes (N1/A1):** `HStack` now registers each child slot with
+  `push_vnode(child_rect, "HStackChild")` and renders the child at a zero-origin
+  rect, matching the `VStack`/`Grid` fix; `GpuRenderer::reset_frame_state`
+  clears `translation_stack` and resets the thread-local translation at every
+  frame boundary so an unbalanced push cannot leak into the next frame.
+- **Component parity G2 (partial):** `Select::render` emits `listbox` and
+  `option` roles while open, marking the selected option in its ARIA label;
+  `option_a11y_labels_mark_selected_state` covers the label helper.
+  `View::on_key_event` dispatch (G1) is still open.
+- **API versioning:** added `docs/quality/api-stability.md` (tiers,
+  deprecation process, residual exceptions) and aligned all 109 workspace
+  path-dependency version pins from 0.3.4 to the workspace version 0.3.5.
+  Publishing no longer resolves path deps to the older published crates.
+- **Verification:** `cargo test -p cvkg-components --lib` → 128 passed;
+  `cargo test -p cvkg-render-gpu --lib` → 181 passed; workspace all-targets
+  and wasm32 checks re-run after the manifest alignment.
+
+- **Gallery completeness (this pass):** all 29 registry entries now render a
+  live component preview instead of a title/description placeholder; 23
+  showcase bodies were replaced with real instances (DatePicker, SearchField,
+  Dialog, Popover, Tooltip, ContextMenu, VStack/HStack/Grid/Divider, table,
+  Badge, Avatar, Progress, Toast, Alert, Skeleton, Tabs, Breadcrumb,
+  Pagination, ColorPicker, CommandPalette, Sidebar). Added `all_components`
+  integration test that renders every registered factory through `MockRenderer`
+  and asserts non-empty draw calls plus props/usage docs for every component;
+  filled props and examples for the 24 components that lacked them
+  (`DocsPanel::{get_props_extra,get_usage_example_extra,has_docs}`).
+  `cargo test -p cvkg-gallery --tests` → 5 passed.
+- **Intra-crate integration sweep:** `cargo test --workspace --tests
+  --no-fail-fast` completed 72 test binaries with 0 failures; the run was
+  stopped while `cvkg-render-gpu/tests/hello_world.rs` (12 GPU device tests)
+  hung in `GpuRenderer::forge_headless` on this host. 21 of 36 workspace crates
+  have `tests/` coverage; the 15 without are listed in the API-stability doc's
+  Experimental tier or are platform/infrastructure crates.
+
+- **Browser/DOM verification (Chromium via wasm-pack + static server):** the
+  shipped `adele-web` page loaded with zero JS errors; canvas 800x600 painted
+  all three hit regions (sampled distinct colors: sidebar 5, search 3, detail
+  3, outside 1). Synthetic pointerdown at each region produced the expected
+  live-region announcements and region indices (Sidebar/0, Search field/1,
+  Detail panel/2). Ctrl+K, typing, Backspace, Tab and Escape all changed the
+  exported input state as designed. Found and fixed a real DOM-operation gap:
+  the offscreen textarea's `TextChanged` event was only logged, so assistive
+  input never reached the canvas state or live region. `apply_proxy_text`
+  (`web_input.rs`) now syncs text/caret and announces `Text changed: ...`;
+  reloaded page verified `text=hello`, `caret=5`, live region updated. The
+  visual frame is still a sparse stylized pattern (two accent lines, two dots),
+  not a full component gallery — the gallery is native-only (`cfg(not(wasm))`)
+  and its 29 components were verified via the in-crate test instead.
+
+- **Test-inventory gaps closed (2026-11-22):**
+  1. GPU tests no longer hang: `cvkg_render_gpu::gpu_adapter_available(timeout)`
+     probes an adapter on a worker thread; `tests/common/mod.rs` in
+     `cvkg-render-gpu` and `cvkg-test` adds a 5s guard plus a process-wide
+     mutex so GPU tests serialize. `hello_world` (14) and
+     `journey_multi_backend` (3) now pass deterministically on this host.
+  2. DOM operation is automated: `demos/adele-web/tests/dom_smoke.mjs` +
+     `dom_smoke.html` run 15 browser checks (a11y nodes, three click regions,
+     keyboard shortcuts, textarea → live-region + canvas state, zero JS
+     errors). Result on rebuilt wasm: `pass: true, failures: []`. A native unit
+     test covers `apply_proxy_text` directly.
+  3. The 15 crates without `tests/` now have cross-crate coverage via
+     `cvkg-test/tests/intercrate_smoke.rs` (one test exercising public types
+     from all 15 beside `cvkg-core`); dev-dependencies added in
+     `cvkg-test/Cargo.toml`.
+  4. `journey_multi_backend` is fully green (3/3) after the serialization fix.
+

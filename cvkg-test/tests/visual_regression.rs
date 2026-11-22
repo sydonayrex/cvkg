@@ -1,3 +1,5 @@
+mod common;
+
 use cvkg_core::{FrameRenderer, Rect, Renderer, View};
 use cvkg_render_gpu::GpuRenderer;
 use cvkg_test::VisualComparator;
@@ -10,6 +12,11 @@ static GPU_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
 async fn test_visual_regression_basic() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_visual_regression_basic: no adapter within 5s");
+        return;
+    }
     let _guard = GPU_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let width = 128;
     let height = 128;
@@ -95,6 +102,11 @@ async fn test_visual_regression_basic() {
 
 #[tokio::test]
 async fn test_generate_niflheim_screenshot() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_generate_niflheim_screenshot: no adapter within 5s");
+        return;
+    }
     let _guard = GPU_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let tokens = cvkg_core::default_tokens();
     cvkg_core::env::insert::<cvkg_core::YggdrasilKey>(tokens);

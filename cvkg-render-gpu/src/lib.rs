@@ -195,6 +195,37 @@ pub use cvkg_core::{ColorTheme, SceneUniforms};
 
 pub use renderer::GpuRenderer;
 
+/// Probe for a usable wgpu adapter with a hard timeout.
+///
+/// GPU-dependent tests call this before `GpuRenderer::forge_headless`: on hosts
+/// without an adapter, adapter requests can block forever. This function moves
+/// the request to a worker thread and reports `false` after `timeout`, so test
+/// binaries can skip instead of hanging.
+pub fn gpu_adapter_available(timeout: std::time::Duration) -> bool {
+    use std::sync::mpsc;
+
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            flags: wgpu::InstanceFlags::default(),
+            backend_options: wgpu::BackendOptions::default(),
+            display: None,
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        });
+        let adapter = futures::executor::block_on(instance.request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::LowPower,
+                compatible_surface: None,
+                force_fallback_adapter: true,
+            },
+        ));
+        let _ = tx.send(adapter.ok().is_some());
+    });
+    rx.recv_timeout(timeout).unwrap_or(false)
+}
+
+
 // P1-35: SVG filter graph integration (moved to filter/ module)
 pub use types::{SvgAnimation, SvgModel};
 pub use vertex::{InstanceData, InstanceData3D, Vertex};

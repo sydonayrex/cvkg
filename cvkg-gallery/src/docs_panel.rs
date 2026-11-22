@@ -20,6 +20,16 @@ impl DocsPanel {
         let state = self.state.lock().unwrap();
         state.selected_component.as_ref().and_then(|name| Registry::find(name))
     }
+
+    /// Whether the API docs panel has both props and a usage example for this
+    /// component. Used by the gallery coverage test.
+    pub fn has_docs(name: &str) -> bool {
+        let has_props = !Self::get_props_for_component(name).is_empty()
+            || !Self::get_props_extra(name).is_empty();
+        let has_example = Self::get_usage_example(name) != "// No example available"
+            || !Self::get_usage_example_extra(name).is_empty();
+        has_props && has_example
+    }
 }
 
 impl View for DocsPanel {
@@ -71,7 +81,8 @@ impl View for DocsPanel {
             renderer.draw_text_raw("Props", rect.x + pad, y, 14.0, [0.2, 0.2, 0.2, 1.0]);
             y += 22.0;
 
-            let props = Self::get_props_for_component(&meta.name);
+            let mut props = Self::get_props_for_component(&meta.name);
+            props.extend(Self::get_props_extra(&meta.name));
             for (prop_name, prop_type, default, desc) in props {
                 // Prop row background
                 let row_h = 32.0;
@@ -108,6 +119,8 @@ impl View for DocsPanel {
             y += 22.0;
 
             let example = Self::get_usage_example(&meta.name);
+            let extra = Self::get_usage_example_extra(&meta.name);
+            let example = if extra.is_empty() { example } else { extra };
             let code_block = Codeblock::new(example).language("rust");
             let code_rect = Rect { x: rect.x + pad, y, width: content_w, height: 160.0 };
             code_block.render(renderer, code_rect);
@@ -185,6 +198,115 @@ impl DocsPanel {
         }
     }
 
+    fn get_props_extra(name: &str) -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
+        match name {
+            "Checkbox" => vec![
+                ("label", "string", "\"Remember me\"", "Label text"),
+                ("checked", "bool", "false", "Checked state"),
+                ("on_change", "fn(bool)", "|b| {}", "Change handler"),
+            ],
+            "DatePicker" => vec![
+                ("on_change", "fn(u32,u32,u32)", "|_,_,_| {}", "Date selection handler"),
+                ("range_mode", "bool", "false", "Range selection"),
+            ],
+            "SearchField" => vec![
+                ("text", "string", "\"\"", "Current query"),
+                ("placeholder", "string", "\"Search...\"", "Placeholder text"),
+                ("width", "f32", "220.0", "Field width"),
+            ],
+            "Dialog" => vec![
+                ("content", "View", "Text::new(...)", "Dialog body"),
+                ("title", "string", "\"\"", "Header title"),
+                ("presented", "bool", "false", "Visibility"),
+            ],
+            "Popover" => vec![
+                ("trigger", "View", "Button::new(...)", "Anchor view"),
+                ("content", "View", "Text::new(...)", "Popover body"),
+            ],
+            "Tooltip" => vec![
+                ("content", "View", "Button::new(...)", "Hover target"),
+                ("text", "string", "\"\"", "Tooltip text"),
+            ],
+            "ContextMenu" => vec![
+                ("items", "Vec<ContextMenuItem>", "vec![...]", "Menu entries"),
+            ],
+            "Grid" => vec![
+                ("columns", "Vec<GridTrack>", "vec![Flex(1.0)]", "Column tracks"),
+                ("rows", "Vec<GridTrack>", "vec![Auto]", "Row tracks"),
+            ],
+            "Avatar" => vec![
+                ("fallback", "string", "\"AL\"", "Initials fallback"),
+                ("status", "AvatarStatus", "Offline", "Presence indicator"),
+            ],
+            "Progress" => vec![
+                ("value", "f32", "0.65", "Completion fraction"),
+                ("variant", "ProgressVariant", "Default", "Visual style"),
+            ],
+            "Toast" => vec![
+                ("title", "string", "\"Saved\"", "Toast title"),
+                ("message", "string", "\"...\"", "Body text"),
+                ("kind", "ToastKind", "Info", "Severity"),
+                ("duration", "f32", "5.0", "Auto-dismiss seconds"),
+            ],
+            "Alert" => vec![
+                ("title", "string", "\"Heads up\"", "Alert title"),
+                ("message", "string", "\"...\"", "Body text"),
+                ("kind", "AlertKind", "Information", "Severity"),
+            ],
+            "Skeleton" => vec![
+                ("(none)", "-", "-", "Create with DraumaSkeleton::new()"),
+            ],
+            "Tabs" => vec![
+                ("options", "Vec<String>", "vec![...]", "Tab labels"),
+                ("selected", "usize", "0", "Selected tab"),
+                ("on_select", "fn(usize)", "|_| {}", "Selection handler"),
+            ],
+            "Breadcrumb" => vec![
+                ("items", "Vec<BreadcrumbItem>", "vec![...]", "Trail entries"),
+                ("on_select", "fn(usize)", "|_| {}", "Item handler"),
+            ],
+            "Pagination" => vec![
+                ("total_pages", "usize", "5", "Page count"),
+                ("on_change", "fn(usize)", "|_| {}", "Page handler"),
+            ],
+            "ColorPicker" => vec![
+                ("color", "[f32;4]", "[0.2,0.4,0.8,1.0]", "Initial RGBA"),
+            ],
+            "CommandPalette" => vec![
+                ("search", "string", "\"\"", "Initial query"),
+                ("open", "flag", "closed", "Visibility"),
+                ("select", "usize", "0", "Selected result"),
+            ],
+            "Sidebar" => vec![
+                ("items", "Vec<SidebarItem>", "vec![...]", "Navigation entries"),
+            ],
+            "VStack" => vec![
+                ("spacing", "f32", "8.0", "Gap between children"),
+                ("alignment", "Alignment", "Start", "Cross-axis alignment"),
+                ("distribution", "Distribution", "Start", "Main-axis distribution"),
+            ],
+            "HStack" => vec![
+                ("spacing", "f32", "8.0", "Gap between children"),
+                ("alignment", "Alignment", "Start", "Cross-axis alignment"),
+                ("distribution", "Distribution", "Start", "Main-axis distribution"),
+            ],
+            "Divider" => vec![
+                ("orientation", "enum", "horizontal", "horizontal() or vertical()"),
+                ("width", "f32", "1.0", "Stroke thickness"),
+            ],
+            "Table" => vec![
+                ("data", "Vec<D>", "vec![...]", "Rows to display"),
+                ("column", "fn(&str,f32,bool,fn)", "-", "Column definition"),
+                ("row_height", "f32", "32.0", "Row height"),
+            ],
+            "Badge" => vec![
+                ("text", "string", "\"New\"", "Badge label"),
+                ("variant", "BadgeVariant", "Default", "Visual style"),
+            ],
+            _ => vec![],
+        }
+    }
+
     fn get_usage_example(name: &str) -> &'static str {
         match name {
             "Button" => r#"use cvkg_components::Button;
@@ -219,6 +341,62 @@ let options = vec![
 let select = Select::new(options, 0)
     .placeholder("Choose...");"#,
             _ => "// No example available",
+        }
+    }
+
+    fn get_usage_example_extra(name: &str) -> &'static str {
+        match name {
+            "Checkbox" => r#"use cvkg_components::*;
+let c = Checkbox::new("Remember me", false, |v| {});"#,
+            "DatePicker" => r#"use cvkg_components::*;
+let d = DatePicker::new(|y, m, day| println!("{y}-{m}-{day}"));"#,
+            "SearchField" => r#"use cvkg_components::*;
+let s = SearchField::new().text("cvkg");"#,
+            "Dialog" => r#"use cvkg_components::*;
+let d = Dialog::new(Text::new("Body")).title("Details").presented(true);"#,
+            "Popover" => r#"use cvkg_components::*;
+let p = Popover::new(Button::new("Open", || {}), Text::new("Content"));"#,
+            "Tooltip" => r#"use cvkg_components::*;
+let t = Tooltip::new(Button::new("Hover", || {}).erase(), "Tip");"#,
+            "ContextMenu" => r#"use cvkg_components::*;
+let m = ContextMenu::new(vec![ContextMenuItem::new("Open"), ContextMenuItem::new("Copy")]);"#,
+            "Grid" => r#"use cvkg_components::*;
+let g = Grid::new(vec![GridTrack::Flex(1.0)], vec![GridTrack::Auto]).child(Text::new("A"));"#,
+            "Avatar" => r#"use cvkg_components::*;
+let a = Avatar::new("AL");"#,
+            "Progress" => r#"use cvkg_components::*;
+let p = Progress::new(0.65);"#,
+            "Toast" => r#"use cvkg_components::*;
+let mut m = ToastManager::new();
+m.info("Saved", "Changes saved");"#,
+            "Alert" => r#"use cvkg_components::*;
+let a = Alert::new("Heads up", "Needs attention").kind(AlertKind::Warning);"#,
+            "Skeleton" => r#"use cvkg_components::*;
+let s = DraumaSkeleton::new();"#,
+            "Tabs" => r#"use cvkg_components::*;
+let t = Tabs::new(vec!["One".into(), "Two".into()], 0, |_| {});"#,
+            "Breadcrumb" => r#"use cvkg_components::*;
+let b = Breadcrumb::new(vec![BreadcrumbItem::new("Home"), BreadcrumbItem::new("Gallery")]);"#,
+            "Pagination" => r#"use cvkg_components::*;
+let p = Pagination::new(5, |page| println!("{page}"));"#,
+            "ColorPicker" => r#"use cvkg_components::*;
+let c = ColorPicker::new([0.2, 0.4, 0.8, 1.0]);"#,
+            "CommandPalette" => r#"use cvkg_components::*;
+let c = CommandPalette::new().open();"#,
+            "Sidebar" => r#"use cvkg_components::*;
+let s = NiflheimSidebar::new(vec![SidebarItem::new("home", "Home")]);"#,
+            "VStack" => r#"use cvkg_components::*;
+let s = VStack::new(8.0).child(Text::new("First")).child(Text::new("Second"));"#,
+            "HStack" => r#"use cvkg_components::*;
+let s = HStack::new(8.0).child(Text::new("Left")).child(Text::new("Right"));"#,
+            "Divider" => r#"use cvkg_components::Divider;
+let d = Divider::horizontal();"#,
+            "Table" => r#"use cvkg_components::*;
+let t = RunesTable::new(vec!["Alice".to_string()])
+    .column("Name", 160.0, true, |name: &String| Text::new(name.clone()));"#,
+            "Badge" => r#"use cvkg_components::Badge;
+let b = Badge::new("New");"#,
+            _ => "",
         }
     }
 }

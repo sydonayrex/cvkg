@@ -48,7 +48,13 @@ std::thread_local! {
 pub fn init_a11y_bridge_spike(canvas_id: &str) -> Result<(), JsValue> {
     let mut bridge = a11y_bridge::A11yBridge::new(canvas_id)?;
     bridge.attach_text_proxy(|event| {
-        log::info!("[a11y-spike] {:?}", event);
+        if let a11y_bridge::AccessEvent::TextChanged(text) = event {
+            crate::web_input::apply_proxy_text(&text);
+            let _ = crate::announce_to_a11y(&format!("Text changed: {text}"));
+            crate::schedule_render();
+        } else {
+            log::info!("[a11y-spike] {:?}", event);
+        }
     })?;
     bridge.upsert_node(1, None, "heading", "ADELE design systems explorer")?;
     bridge.upsert_node(2, Some(1), "textbox", "Search systems")?;

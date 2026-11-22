@@ -34,13 +34,13 @@ name = "themes_tests"
 path = "tests/themes_tests.rs"
 
 [dependencies.cvkg-anim]
-version = "0.3.4"
+version = "0.3.5"
 [dependencies.tracing]
 workspace = true
 
 
 [dependencies.cvkg-core]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.serde]
 version = "1.0"

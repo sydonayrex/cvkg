@@ -120,6 +120,16 @@ impl<V: Clone> Select<V> {
     }
 }
 
+/// Accessibility label for a dropdown option. Assistive technology needs the
+/// selected state on the option itself, not only on the combobox's value.
+fn option_a11y_label(label: &str, selected: bool) -> String {
+    if selected {
+        format!("{label}, selected")
+    } else {
+        label.to_string()
+    }
+}
+
 impl<V: Clone + Send + Sync + 'static> View for Select<V> {
     type Body = Never;
     fn body(self) -> Self::Body {
@@ -148,6 +158,18 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
             .get_component_state::<usize>(self.id_hash.wrapping_add(2))
             .and_then(|v| v.read().ok().map(|g| *g))
             .or(self.selected_index);
+
+        // P2-1: publish the popup structure while it is visible. The combobox
+        // above carries value/expanded/invalid; options carry their own state.
+        if is_open {
+            renderer.register_a11y("listbox", &format!("{} options", self.options.len()));
+            for (idx, (label, _)) in self.options.iter().enumerate() {
+                renderer.register_a11y(
+                    "option",
+                    &option_a11y_label(label, Some(idx) == selected_idx),
+                );
+            }
+        }
 
         // Main select box
         let border_color = if is_open {
@@ -887,5 +909,11 @@ mod aria_tests {
         assert_eq!(props.expanded, Some(false));
         assert_eq!(props.value.as_deref(), Some("Second"));
         assert_eq!(props.invalid, Some(false));
+    }
+
+    #[test]
+    fn option_a11y_labels_mark_selected_state() {
+        assert_eq!(super::option_a11y_label("First", false), "First");
+        assert_eq!(super::option_a11y_label("Second", true), "Second, selected");
     }
 }

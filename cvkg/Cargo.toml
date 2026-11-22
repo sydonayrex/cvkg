@@ -62,57 +62,57 @@ name = "declarative_dashboard"
 path = "examples/declarative_dashboard.rs"
 
 [dependencies.cvkg-anim]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-components]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-core]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-layout]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-macros]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-render-gpu]
-version = "0.3.4"
+version = "0.3.5"
 optional = true
 
 [dependencies.cvkg-render-native]
-version = "0.3.4"
+version = "0.3.5"
 optional = true
 
 [dependencies.cvkg-scheduler]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-svg-serialize]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-vdom]
-version = "0.3.4"
+version = "0.3.5"
 
 
 
 [dependencies.cvkg-scene]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-themes]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-render-3d]
-version = "0.3.4"
+version = "0.3.5"
 optional = true
 path = "../cvkg-render-3d"
 
 [dependencies.cvkg-physics]
-version = "0.3.4"
+version = "0.3.5"
 optional = true
 path = "../cvkg-physics"
 
 [dependencies.cvkg-flow]
-version = "0.3.4"
+version = "0.3.5"
 optional = true
 path = "../cvkg-flow"
 

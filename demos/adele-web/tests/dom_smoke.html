@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CVKG DOM smoke test</title>
+  <style>
+    body { margin: 0; background: #050508; color: #0ff; font: 12px monospace; }
+    #cvkg-canvas { width: 800px; height: 600px; display: block; }
+    #result { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <canvas id="cvkg-canvas"></canvas>
+  <pre id="result">running...</pre>
+  <script type="module">
+    import { runDomSmoke } from './dom_smoke.mjs';
+    try {
+      const result = await runDomSmoke();
+      document.querySelector('#result').textContent = JSON.stringify(result, null, 2);
+      console.log('DOM_SMOKE', result);
+    } catch (error) {
+      document.querySelector('#result').textContent = 'THREW: ' + error;
+      console.error('DOM_SMOKE_THREW', error);
+    }
+  </script>
+</body>
+</html>

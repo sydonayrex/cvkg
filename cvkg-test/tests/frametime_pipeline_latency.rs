@@ -4,6 +4,8 @@
 //! This module measures raw pipeline ingestion latency, ensuring subsequent frames
 //! execute within the 16.6ms target frame budget when caches are hot.
 
+mod common;
+
 use cvkg_core::{FrameRenderer, Rect, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 use std::time::Instant;
@@ -15,6 +17,11 @@ use std::time::Instant;
 /// Assertions guarantee that the hot path runs in under 50ms (typically <5ms) to prevent UI stutter.
 #[tokio::test]
 async fn test_pipeline_ingestion_latency() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_pipeline_ingestion_latency: no adapter within 5s");
+        return;
+    }
     let _ = env_logger::try_init();
     let width = 800;
     let height = 600;

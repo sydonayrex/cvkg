@@ -641,8 +641,8 @@ impl View for DatePickerShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePickerShowcase");
-        renderer.draw_text_raw("Date Picker", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Calendar-based date selection", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::DatePicker::new(|_y, _m, _d| {}).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -668,8 +668,8 @@ impl View for SearchFieldShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "SearchFieldShowcase");
-        renderer.draw_text_raw("Search Field with Suggestions", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Auto-complete search input", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::SearchField::new().render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -695,8 +695,8 @@ impl View for DialogShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DialogShowcase");
-        renderer.draw_text_raw("Modal Dialog", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Dialog with title, content, and actions", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Dialog::new(cvkg_components::Text::new("Dialog body").erase()).presented(true).title("Modal Dialog").render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -722,8 +722,8 @@ impl View for PopoverShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "PopoverShowcase");
-        renderer.draw_text_raw("Popover", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Floating anchored content", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Popover::new(cvkg_components::Button::new("Open", || {}), cvkg_components::Text::new("Popover content")).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -749,8 +749,8 @@ impl View for TooltipShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "TooltipShowcase");
-        renderer.draw_text_raw("Tooltip", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Hover-activated helper text", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Tooltip::new(cvkg_components::Button::new("Hover", || {}).erase(), "Helpful tooltip").render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -776,8 +776,8 @@ impl View for ContextMenuShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ContextMenuShowcase");
-        renderer.draw_text_raw("Context Menu", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Right-click contextual actions", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::ContextMenu::new(vec![cvkg_components::ContextMenuItem::new("Open"), cvkg_components::ContextMenuItem::new("Copy")]).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -803,8 +803,8 @@ impl View for VStackShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "VStackShowcase");
-        renderer.draw_text_raw("Vertical Stack", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Vertical layout with alignment", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::VStack::new(8.0).child(cvkg_components::Text::new("First")).child(cvkg_components::Text::new("Second")).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -830,8 +830,8 @@ impl View for HStackShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HStackShowcase");
-        renderer.draw_text_raw("Horizontal Stack", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Horizontal layout with distribution", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::HStack::new(8.0).child(cvkg_components::Text::new("Left")).child(cvkg_components::Text::new("Right")).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -857,8 +857,8 @@ impl View for GridShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "GridShowcase");
-        renderer.draw_text_raw("Responsive Grid", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Auto-fit responsive grid layout", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Grid::new(vec![cvkg_components::GridTrack::Flex(1.0), cvkg_components::GridTrack::Flex(1.0)], vec![cvkg_components::GridTrack::Fixed(48.0)]).child(cvkg_components::Text::new("A")).child(cvkg_components::Text::new("B")).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -884,8 +884,8 @@ impl View for DividerShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DividerShowcase");
-        renderer.draw_text_raw("Divider", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Visual separator lines", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Divider::horizontal().render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -911,8 +911,8 @@ impl View for TableShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "TableShowcase");
-        renderer.draw_text_raw("Data Table", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Sortable, selectable data grid", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::RunesTable::new(vec!["Alice".to_string(), "Bob".to_string()]).column("Name", 160.0, true, |name: &String| cvkg_components::Text::new(name.clone())).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -938,8 +938,8 @@ impl View for BadgeShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "BadgeShowcase");
-        renderer.draw_text_raw("Status Badges", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Variants: default, secondary, destructive, outline", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Badge::new("New").render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -965,8 +965,8 @@ impl View for AvatarShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "AvatarShowcase");
-        renderer.draw_text_raw("User Avatars", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Image, initials, status indicator", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Avatar::new("AL").render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -992,8 +992,8 @@ impl View for ProgressShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ProgressShowcase");
-        renderer.draw_text_raw("Progress Bars", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Determinate & indeterminate", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Progress::new(0.65).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1019,8 +1019,10 @@ impl View for ToastShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ToastShowcase");
-        renderer.draw_text_raw("Toast Notifications", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Transient feedback messages", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        let mut manager = cvkg_components::ToastManager::new();
+        manager.info("Saved", "Your changes were saved");
+        manager.render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1046,8 +1048,8 @@ impl View for AlertShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "AlertShowcase");
-        renderer.draw_text_raw("Alert Messages", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Inline contextual alerts", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Alert::new("Heads up", "Something needs attention").kind(cvkg_components::AlertKind::Warning).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1073,8 +1075,8 @@ impl View for SkeletonShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "SkeletonShowcase");
-        renderer.draw_text_raw("Loading Skeletons", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Loading placeholder components", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::DraumaSkeleton::new().render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1100,8 +1102,8 @@ impl View for TabsShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "TabsShowcase");
-        renderer.draw_text_raw("Tab Navigation", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Tab panels with content", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Tabs::new(vec!["Overview".to_string(), "Details".to_string()], 0, |_| {}).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1127,8 +1129,8 @@ impl View for BreadcrumbShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "BreadcrumbShowcase");
-        renderer.draw_text_raw("Breadcrumb Trail", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Hierarchical navigation", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Breadcrumb::new(vec![cvkg_components::BreadcrumbItem::new("Home"), cvkg_components::BreadcrumbItem::new("Gallery")]).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1154,8 +1156,8 @@ impl View for PaginationShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "PaginationShowcase");
-        renderer.draw_text_raw("Pagination Controls", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Page navigation", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::Pagination::new(5, |_| {}).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1181,8 +1183,8 @@ impl View for ColorPickerShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ColorPickerShowcase");
-        renderer.draw_text_raw("Color Picker", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Multi-format color selection", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::ColorPicker::new([0.2, 0.4, 0.8, 1.0]).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1208,8 +1210,8 @@ impl View for CommandPaletteShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "CommandPaletteShowcase");
-        renderer.draw_text_raw("Command Palette", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("MimirSpotlight integration", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::CommandPalette::new().search("").open().render(renderer, child_rect);
         renderer.pop_vnode();
     }
 
@@ -1235,8 +1237,8 @@ impl View for SidebarShowcase {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "SidebarShowcase");
-        renderer.draw_text_raw("NiflheimSidebar", rect.x + 16.0, rect.y + 24.0, 18.0, [0.2, 0.2, 0.2, 1.0]);
-        renderer.draw_text_raw("Collapsible navigation sidebar", rect.x + 16.0, rect.y + 50.0, 14.0, [0.5, 0.5, 0.5, 1.0]);
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::chrome::NiflheimSidebar::new(vec![cvkg_components::chrome::SidebarItem::new("home", "Home"), cvkg_components::chrome::SidebarItem::new("gallery", "Gallery")]).render(renderer, child_rect);
         renderer.pop_vnode();
     }
 

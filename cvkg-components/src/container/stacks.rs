@@ -349,7 +349,21 @@ impl View for HStack {
         let mut rect_idx = 0;
         for child in self.children.iter() {
             if child.layout().is_some() && rect_idx < rects.len() {
-                child.render(renderer, rects[rect_idx]);
+                let child_rect = rects[rect_idx];
+                // Register the child slot so descendants that push their own
+                // vnode get a zero-origin rect instead of re-adding child_rect.x
+                // (same contract as VStack/Grid).
+                renderer.push_vnode(child_rect, "HStackChild");
+                child.render(
+                    renderer,
+                    Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: child_rect.width,
+                        height: child_rect.height,
+                    },
+                );
+                renderer.pop_vnode();
                 rect_idx += 1;
             }
         }

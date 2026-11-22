@@ -69,6 +69,11 @@ impl GpuRenderer {
         self.pending_transparent_instances_3d.clear();
         self.pending_scene_radius = 100.0;
         self.current_z = 0.0;
+        // The translation stack lives on the persistent GpuRenderer (the old
+        // one lived on the per-frame NativeRenderer). Clear it every frame so
+        // an unbalanced push cannot bias all primitives in the next frame.
+        self.translation_stack.clear();
+        cvkg_core::set_renderer_translation(glam::Vec2::ZERO);
         // P2-13: Always update the volumetric time uniform, even if the
         // volumetric pass is skipped by the frame budget system. This prevents
         // a visible time pop when the pass resumes after being skipped.

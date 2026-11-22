@@ -5,6 +5,8 @@
 //! and various creative suite editors) to verify formatting, pipelines, materials,
 //! component composition, and correct rendering layers.
 
+mod common;
+
 use cvkg_core::{ColorTheme, FrameRenderer, Rect, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 
@@ -50,6 +52,11 @@ fn count_matching_pixels(
 /// CONTRACT: Renders a complex frame using multiple passes and verifies that the output is not empty/black.
 #[test]
 fn test_complex_integrated_rendering() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_complex_integrated_rendering: no adapter within 5s");
+        return;
+    }
     let width = 256;
     let height = 256;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -137,6 +144,11 @@ fn test_complex_integrated_rendering() {
 /// CONTRACT: Verifies that the selection overlay renders correctly on top of other objects.
 #[test]
 fn test_standard_ui_svg_editor() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_svg_editor: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -243,6 +255,11 @@ fn test_standard_ui_svg_editor() {
 /// CONTRACT: Verifies that the red playhead vertical line is drawn.
 #[test]
 fn test_standard_ui_daw() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_daw: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -360,6 +377,11 @@ fn test_standard_ui_daw() {
 /// CONTRACT: Verifies that the warm sunset image color segment renders successfully.
 #[test]
 fn test_standard_ui_photo_editor() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_photo_editor: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -456,6 +478,11 @@ fn test_standard_ui_photo_editor() {
 /// CONTRACT: Verifies that the white page sheet area renders correctly.
 #[test]
 fn test_standard_ui_word_processor() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_word_processor: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -541,6 +568,11 @@ fn test_standard_ui_word_processor() {
 /// CONTRACT: Verifies that the slide canvas graphics (blue gradient block) render correctly.
 #[test]
 fn test_standard_ui_presentation_software() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_presentation_software: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -643,6 +675,11 @@ fn test_standard_ui_presentation_software() {
 /// CONTRACT: Captures frame and verifies syntax highlighted code pixels (e.g. orange keywords).
 #[test]
 fn test_standard_ui_ide() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_ide: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -737,6 +774,11 @@ fn test_standard_ui_ide() {
 /// CONTRACT: Captures frame and verifies green prompt symbol rendering.
 #[test]
 fn test_standard_ui_terminal() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_terminal: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -809,6 +851,11 @@ fn test_standard_ui_terminal() {
 /// CONTRACT: Captures frame and verifies game project cards presence.
 #[test]
 fn test_standard_ui_game_repo() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_game_repo: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -877,6 +924,11 @@ fn test_standard_ui_game_repo() {
 /// CONTRACT: Captures frame and verifies user message bubble rendering.
 #[test]
 fn test_standard_ui_ai_desktop() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_ai_desktop: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -959,6 +1011,11 @@ fn test_standard_ui_ai_desktop() {
 /// CONTRACT: Captures frame and verifies the presence of red margin line pixels.
 #[test]
 fn test_standard_ui_notepad() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_standard_ui_notepad: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1025,6 +1082,11 @@ fn test_standard_ui_notepad() {
 /// CONTRACT: Captures frame and verifies purple/pink video track segment rendering.
 #[test]
 fn test_creative_ui_movie_editor() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_movie_editor: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1117,6 +1179,11 @@ fn test_creative_ui_movie_editor() {
 /// CONTRACT: Captures frame and verifies bright neon green waveform block rendering.
 #[test]
 fn test_creative_ui_sound_editor() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_sound_editor: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1204,6 +1271,11 @@ fn test_creative_ui_sound_editor() {
 /// CONTRACT: Captures frame and verifies color node header rendering.
 #[test]
 fn test_creative_ui_movie_effects() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_movie_effects: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1282,6 +1354,11 @@ fn test_creative_ui_movie_effects() {
 /// CONTRACT: Validates rendering of progress indicator bar component, document grids, and top UI overlays.
 #[test]
 fn test_creative_ui_desktop_publishing() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_desktop_publishing: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1407,6 +1484,11 @@ fn test_creative_ui_desktop_publishing() {
 /// CONTRACT: Captures frame and verifies connection wire presence.
 #[test]
 fn test_creative_ui_ui_ux_prototyping() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_ui_ux_prototyping: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1504,6 +1586,11 @@ fn test_creative_ui_ui_ux_prototyping() {
 /// CONTRACT: Validates split pane boundaries and active spinner loading indicators.
 #[test]
 fn test_creative_ui_web_design() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_web_design: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1589,6 +1676,11 @@ fn test_creative_ui_web_design() {
 /// CONTRACT: Validates rendering of 3D meshes under directional lighting.
 #[test]
 fn test_creative_ui_3d_material_painter() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_3d_material_painter: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1663,6 +1755,11 @@ fn test_creative_ui_3d_material_painter() {
 /// CONTRACT: Validates rendering of highlighted fields, signature fields, and disclosure menus.
 #[test]
 fn test_creative_ui_pdf_editor() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_pdf_editor: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
@@ -1746,6 +1843,11 @@ fn test_creative_ui_pdf_editor() {
 /// CONTRACT: Validates rendering of neon skeletal armature components.
 #[test]
 fn test_creative_ui_character_motion() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_creative_ui_character_motion: no adapter within 5s");
+        return;
+    }
     let width = 512;
     let height = 512;
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));

@@ -2,6 +2,8 @@
 //!
 //! Uses headless wgpu renderer to produce actual pixel output.
 
+mod common;
+
 use cvkg_core::{Rect, Renderer, View};
 use cvkg_render_gpu::renderer::GpuRenderer;
 use cvkg_gallery::GalleryApp;
@@ -26,6 +28,11 @@ fn render_solid_rect(width: u32, height: u32, color: [f32; 4]) -> Vec<u8> {
 #[test]
 #[ignore = "manual visual verification - run with --ignored"]
 fn test_gallery_screenshot() {
+    let _gpu_lock = crate::common::gpu_lock();
+    if !crate::common::gpu_available() {
+        eprintln!("[gpu-guard] skipping test_gallery_screenshot: no adapter within 5s");
+        return;
+    }
     let width = 1200;
     let height = 800;
     

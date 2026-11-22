@@ -42,17 +42,17 @@ name = "journey_tests"
 path = "tests/journey_tests.rs"
 
 [dependencies]
-cvkg-runic-text = { version = "0.3.4", path = "../cvkg-runic-text" }
+cvkg-runic-text = { version = "0.3.5", path = "../cvkg-runic-text" }
 
 [dependencies.bincode-next]
 version = "3.1.1"
 features = ["serde"]
 
 [dependencies.cvkg-core]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.cvkg-spatial]
-version = "0.3.4"
+version = "0.3.5"
 
 [dependencies.glam]
 version = "0.33"

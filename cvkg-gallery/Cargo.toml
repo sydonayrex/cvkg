@@ -32,3 +32,7 @@ glam = { workspace = true }
 [[test]]
 name = "trace_gallery"
 path = "tests/trace_gallery.rs"
+
+[[test]]
+name = "all_components"
+path = "tests/all_components.rs"
