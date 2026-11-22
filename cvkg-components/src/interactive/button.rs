@@ -2,7 +2,10 @@ use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use crate::{ButtonSize, ButtonVariant, FONT_BASE, RADIUS_MD};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
-use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, Size, View};
+use cvkg_core::{
+    AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, SemanticColor, Size,
+    Style, View,
+};
 use std::sync::Arc;
 
 /// Button with action callback, variant styling, size options, and disabled state.
@@ -88,10 +91,33 @@ impl Button {
         self
     }
 
+    /// Semantic style for this button's state.
+    fn semantic_style(&self) -> Style {
+        Style::new().disabled_background(SemanticColor::Muted)
+    }
+
+    fn resolve_semantic(token: SemanticColor) -> [f32; 4] {
+        match token {
+            SemanticColor::Muted => [0.05, 0.045, 0.05, 1.0],
+            SemanticColor::Primary => theme::accent(),
+            SemanticColor::Secondary => theme::surface(),
+            SemanticColor::Border => theme::border(),
+            SemanticColor::Success => theme::success(),
+            SemanticColor::Danger => theme::error_color(),
+            SemanticColor::Warning => theme::warning(),
+            SemanticColor::Text => theme::text(),
+            SemanticColor::Surface => theme::surface(),
+        }
+    }
+
     /// Compute the background color based on variant and state.
     fn bg_color(&self, is_pressed: bool, is_hovered: bool) -> [f32; 4] {
         if self.disabled || self.loading {
-            return [0.05, 0.045, 0.05, 1.0]; // near-black ceramic — disabled base
+            return self
+                .semantic_style()
+                .resolve_disabled_background()
+                .map(Self::resolve_semantic)
+                .unwrap_or([0.05, 0.045, 0.05, 1.0]);
         }
         match self.variant {
             ButtonVariant::Default => {
