@@ -8,6 +8,17 @@ use cvkg_gallery::DocsPanel;
 use cvkg_gallery::state::{GalleryState, Registry};
 
 #[test]
+fn every_registered_component_has_generated_docs_summary() {
+    for meta in Registry::all() {
+        assert!(
+            DocsPanel::has_generated_summary(meta.name),
+            "{} missing generated docs summary",
+            meta.name
+        );
+    }
+}
+
+#[test]
 fn every_registered_component_renders_a_live_preview() {
     let components = Registry::all();
     assert!(
