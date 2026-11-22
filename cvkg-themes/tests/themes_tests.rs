@@ -165,6 +165,15 @@ fn test_theme_motion_journey() {
 }
 
 #[test]
+fn semantic_token_values_are_consistent_across_presets() {
+    for theme in [Theme::dark(), Theme::light()] {
+        assert_eq!(theme.typography.body, 16.0);
+        assert_eq!(theme.spacing.m, 16.0);
+        assert_eq!(theme.radius.m, 6.0);
+    }
+}
+
+#[test]
 fn smoke_test_theme_compiles() {
     let _theme = Theme::dark();
 }

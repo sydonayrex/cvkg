@@ -44,6 +44,8 @@ single semantic-token model that keeps existing public APIs compiling.
 | D9 | **Literal RGBA remains in themed components** despite the module contract at `cvkg-components/src/theme.rs:4-5`: 14 arrays in `interactive/button.rs` (e.g. `:94`, `:252-253`), 3 in `bifrost_tabs.rs`, 1 each in `data_grid.rs`, `dialog.rs`, `dropdown_menu.rs`. | `cvkg-components/src/theme.rs:4-5`, `cvkg-components/src/interactive/button.rs:92-264` |
 | D10 | **Density is defined but unconsumed.** `Density` and its multiplier exist on `Theme`/`ThemeBuilder`; no `Density` reference appears in `cvkg-components/src`. `ThemeBuilder::build()` also claims APCA validation but only returns `self.base`. | `cvkg-themes/src/lib.rs:395-413`, `:441`, `:1066-1069`, `:1178-1181` |
 
+Status update: D3/D4/D5/D8 are resolved. Every theme preset now uses `body=16`, `spacing.m=16`, and `radius.m=6`; the CSS export reads those values from the theme instead of hardcoded literals. Regression test: `cvkg-themes/tests/themes_tests.rs::semantic_token_values_are_consistent_across_presets`.
+
 ## 4. Proposal — single semantic-token model
 
 This section is a **proposal only**. No source file is changed by this document.
