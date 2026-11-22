@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 // =============================================================================
 // FOCUS MANAGEMENT
@@ -141,5 +143,58 @@ impl FocusManager {
             .last()
             .map(|t| t.order.as_slice())
             .unwrap_or(&self.order)
+    }
+}
+
+static NEXT_FOCUS_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Stable identity for a focusable widget. Clones share one id.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FocusHandle {
+    id: Arc<u64>,
+}
+
+impl FocusHandle {
+    pub fn new() -> Self {
+        let id = NEXT_FOCUS_ID.fetch_add(1, Ordering::Relaxed);
+        Self { id: Arc::new(id) }
+    }
+
+    pub fn id(&self) -> u64 {
+        *self.id
+    }
+}
+
+impl Default for FocusHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Active key contexts. The last pushed context wins during action lookup.
+#[derive(Clone, Debug, Default)]
+pub struct KeyContextStack {
+    pub(crate) stack: Vec<&'static str>,
+}
+
+impl KeyContextStack {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn push(&mut self, context: &'static str) {
+        self.stack.push(context);
+    }
+
+    pub fn pop(&mut self) -> Option<&'static str> {
+        self.stack.pop()
+    }
+
+    pub fn current(&self) -> Option<&'static str> {
+        self.stack.last().copied()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.stack.is_empty()
     }
 }

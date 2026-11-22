@@ -104,6 +104,10 @@ version = "0.2"
 version = "0.4"
 
 [[test]]
+name = "action_dispatch"
+path = "tests/action_dispatch.rs"
+
+[[test]]
 name = "dirty_flags_tests"
 path = "tests/dirty_flags_tests.rs"
 

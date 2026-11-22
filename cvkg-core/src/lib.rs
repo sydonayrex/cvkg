@@ -79,6 +79,8 @@ pub use view::*;
 pub mod aria;
 pub use aria::*;
 
+pub mod action;
+pub use action::*;
 pub mod keyboard;
 pub use keyboard::*;
 
