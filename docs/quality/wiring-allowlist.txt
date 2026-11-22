@@ -1,0 +1,10 @@
+# Production APIs that must have at least one caller.
+# A baseline entry is an approved temporary exception.
+on_key_event
+build_accesskit_tree
+DockingWorkspace
+VirtualList
+set_prop_value
+notify_conflict
+validate_light_source
+IS_BATCHING
