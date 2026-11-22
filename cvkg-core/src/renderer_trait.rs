@@ -636,9 +636,9 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     // to query the cumulative offset.
     //
     // Default impls below are no-ops (translation = (0,0)) so existing
-    // consumers are unaffected. cvkg-render-native and cvkg-vdom
-    // override these on `VNodeRenderer` and `NativeRenderer` so a
-    // stack is maintained in lock-step with `push_vnode`/`pop_vnode`.
+    // consumers are unaffected. GpuRenderer owns the cumulative stack for
+    // painting. VNodeRenderer keeps capture-time geometry only and does
+    // not write the renderer thread-local.
 
     /// Push an absolute-pixel translation. Components and primitives
     /// may call this when drawing local-coordinate content (e.g. after

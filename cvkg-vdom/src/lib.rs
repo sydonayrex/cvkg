@@ -1361,7 +1361,6 @@ impl cvkg_core::Renderer for VNodeRenderer {
             glam::Vec2::new(rect.x, rect.y)
         };
         self.translation_stack.push([new_top.x, new_top.y]);
-        cvkg_core::set_renderer_translation(new_top);
 
         let id = self.next_id();
         let role = match name {
@@ -1412,7 +1411,6 @@ impl cvkg_core::Renderer for VNodeRenderer {
             glam::Vec2::new(rect.x, rect.y)
         };
         self.translation_stack.push([new_top.x, new_top.y]);
-        cvkg_core::set_renderer_translation(new_top);
 
         // Convert companions Vec to HashMap
         let mut companion_map: HashMap<String, Box<dyn cvkg_core::Companion>> = HashMap::new();
@@ -1459,15 +1457,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
     /// stack so `current_translation()` reflects the parent's world offset.
     fn pop_vnode(&mut self) {
         self.stack.pop();
-        // Mirror-pop translation to match push_vnode.
+        // Mirror-pop translation to match push_vnode. GpuRenderer owns the
+        // thread-local value; this stack is capture-time geometry only.
         self.translation_stack.pop();
-        let new_top = self
-            .translation_stack
-            .last()
-            .copied()
-            .map(|[x, y]| glam::Vec2::new(x, y))
-            .unwrap_or(glam::Vec2::ZERO);
-        cvkg_core::set_renderer_translation(new_top);
     }
 
     /// Retrieve a companion state for the VNode currently at the top of the stack.
@@ -1896,24 +1888,12 @@ impl cvkg_core::Renderer for VNodeRenderer {
     // walk (peeled by `pop_translation` at VDOM close).
     fn push_translation(&mut self, translation: glam::Vec2) {
         self.translation_stack.push([translation.x, translation.y]);
-        // Phase 3b/3c: bridge the storage Vec<[f32;2]> to the
-        // cvkg_core thread-local so any GPU consumer that consults
-        // `current_renderer_translation()` (in case VDOM is used as
-        // the painting path in tests) sees the same value.
-        cvkg_core::set_renderer_translation(translation);
+        // Capture-time geometry only. GpuRenderer owns the renderer
+        // thread-local translation.
     }
 
     fn pop_translation(&mut self) {
         self.translation_stack.pop();
-        // Restore the new top to the thread-local so nested pops
-        // correctly reflect cumulative state.
-        let new_top = self
-            .translation_stack
-            .last()
-            .copied()
-            .map(|[x, y]| glam::Vec2::new(x, y))
-            .unwrap_or(glam::Vec2::ZERO);
-        cvkg_core::set_renderer_translation(new_top);
     }
 
     fn current_translation(&self) -> glam::Vec2 {

@@ -1541,7 +1541,9 @@ impl cvkg_core::Renderer for GpuRenderer {
         }
     }
 
-    // ---- VDOM trait overrides intentionally deleted ----
+    // ---- VDOM vnode/event overrides intentionally deleted ----
+    // Translation-only push_vnode/pop_vnode overrides remain above;
+    // they are the single owner of the renderer thread-local offset.
     //
     // `push_vnode`, `pop_vnode`, and `register_handler` previously wrote
     // into GpuRenderer's flat maps (`vnode_stack`, `event_handlers`),

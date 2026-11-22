@@ -1,4 +1,6 @@
 use cvkg_core::KvasirId;
+use cvkg_core::{current_renderer_translation, Rect, Renderer};
+use cvkg_vdom::VNodeRenderer;
 use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode};
 use std::collections::HashMap;
 
@@ -200,4 +202,19 @@ fn validate_node_sync_detects_drift_and_reports_clean() {
     // Should report drift
     let result = vdom.validate_sync(&scene);
     assert!(result.is_err(), "should detect drift");
+}
+
+#[test]
+fn capture_renderer_does_not_own_thread_local_translation() {
+    cvkg_core::set_renderer_translation(glam::Vec2::ZERO);
+    let mut renderer = VNodeRenderer::new();
+    renderer.push_vnode(Rect::new(10.0, 20.0, 100.0, 40.0), "Parent");
+    renderer.push_vnode(Rect::new(5.0, 8.0, 40.0, 20.0), "Child");
+
+    assert_eq!(renderer.current_translation(), glam::Vec2::new(15.0, 28.0));
+    assert_eq!(current_renderer_translation(), glam::Vec2::ZERO);
+
+    renderer.pop_vnode();
+    renderer.pop_vnode();
+    assert_eq!(renderer.current_translation(), glam::Vec2::ZERO);
 }
