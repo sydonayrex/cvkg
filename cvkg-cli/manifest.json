@@ -1,0 +1,2400 @@
+{
+  "version": 1,
+  "components": [
+    {
+      "name": "A11yBeacon",
+      "path": "cvkg-components/src/a11y_beacon.rs",
+      "category": "src"
+    },
+    {
+      "name": "A11yInspector",
+      "path": "cvkg-components/src/a11y_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "A11yNode",
+      "path": "cvkg-components/src/a11y_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "AIExecutionDebugger",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "AIWorkflowBuilder",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "AgentChat",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "AgentConfig",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "AgentInfo",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "AgentMessage",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "Alert",
+      "path": "cvkg-components/src/feedback/alert.rs",
+      "category": "feedback"
+    },
+    {
+      "name": "AlertDialog",
+      "path": "cvkg-components/src/dialog.rs",
+      "category": "src"
+    },
+    {
+      "name": "Animated",
+      "path": "cvkg-components/src/anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "ArrowNav",
+      "path": "cvkg-components/src/keyboard_nav.rs",
+      "category": "src"
+    },
+    {
+      "name": "AspectRatio",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "AssetBrowser",
+      "path": "cvkg-components/src/asset_browser.rs",
+      "category": "src"
+    },
+    {
+      "name": "AssetItem",
+      "path": "cvkg-components/src/asset_browser.rs",
+      "category": "src"
+    },
+    {
+      "name": "AssistantMessage",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "AsyncImage",
+      "path": "cvkg-components/src/image.rs",
+      "category": "src"
+    },
+    {
+      "name": "Audio",
+      "path": "cvkg-components/src/multimedia.rs",
+      "category": "src"
+    },
+    {
+      "name": "AuditEntry",
+      "path": "cvkg-components/src/tyr_security.rs",
+      "category": "src"
+    },
+    {
+      "name": "AutoComplete",
+      "path": "cvkg-components/src/autocomplete.rs",
+      "category": "src"
+    },
+    {
+      "name": "Autocomplete",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "AwaitVeil",
+      "path": "cvkg-components/src/await_veil.rs",
+      "category": "src"
+    },
+    {
+      "name": "BackgroundPattern",
+      "path": "cvkg-components/src/display.rs",
+      "category": "src"
+    },
+    {
+      "name": "Badge",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "BarChart",
+      "path": "cvkg-components/src/gpu_charts/bar.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "BentoGrid",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "BgMediaHero",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "BifrostColorPicker",
+      "path": "cvkg-components/src/interactive/hringrpagination.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "BifrostTabs",
+      "path": "cvkg-components/src/bifrost_tabs.rs",
+      "category": "src"
+    },
+    {
+      "name": "BragiCreative",
+      "path": "cvkg-components/src/bragi_creative.rs",
+      "category": "src"
+    },
+    {
+      "name": "Breadcrumb",
+      "path": "cvkg-components/src/breadcrumb.rs",
+      "category": "src"
+    },
+    {
+      "name": "BreadcrumbItem",
+      "path": "cvkg-components/src/breadcrumb.rs",
+      "category": "src"
+    },
+    {
+      "name": "Button",
+      "path": "cvkg-components/src/interactive/button.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "ButtonGroup",
+      "path": "cvkg-components/src/button_group.rs",
+      "category": "src"
+    },
+    {
+      "name": "Calendar",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "Candle",
+      "path": "cvkg-components/src/gpu_charts/candlestick.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "CandlestickChart",
+      "path": "cvkg-components/src/gpu_charts/candlestick.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "Canvas",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "CanvasItem",
+      "path": "cvkg-components/src/infinite_canvas.rs",
+      "category": "src"
+    },
+    {
+      "name": "CardHoverEffect",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "CardStack",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "Carousel",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "ChatMessage",
+      "path": "cvkg-components/src/raven_messenger.rs",
+      "category": "src"
+    },
+    {
+      "name": "Checkbox",
+      "path": "cvkg-components/src/interactive/checkbox.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "ClippedCornerNode",
+      "path": "cvkg-components/src/clipped_corner.rs",
+      "category": "src"
+    },
+    {
+      "name": "Codeblock",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "CollaborationEngine",
+      "path": "cvkg-components/src/collaboration.rs",
+      "category": "src"
+    },
+    {
+      "name": "Collapsible",
+      "path": "cvkg-components/src/container/disclosure.rs",
+      "category": "container"
+    },
+    {
+      "name": "ColorPicker",
+      "path": "cvkg-components/src/interactive/select.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "Combobox",
+      "path": "cvkg-components/src/combobox.rs",
+      "category": "src"
+    },
+    {
+      "name": "Command",
+      "path": "cvkg-components/src/command.rs",
+      "category": "src"
+    },
+    {
+      "name": "CommandItem",
+      "path": "cvkg-components/src/command.rs",
+      "category": "src"
+    },
+    {
+      "name": "CompanionBundle",
+      "path": "cvkg-components/src/integration/mod.rs",
+      "category": "integration"
+    },
+    {
+      "name": "ComponentAttr",
+      "path": "cvkg-components/src/gullveig_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "ComponentErrorBoundary",
+      "path": "cvkg-components/src/error.rs",
+      "category": "src"
+    },
+    {
+      "name": "ComputedSignal",
+      "path": "cvkg-components/src/computed_signal.rs",
+      "category": "src"
+    },
+    {
+      "name": "Confetti",
+      "path": "cvkg-components/src/effects/confetti.rs",
+      "category": "effects"
+    },
+    {
+      "name": "ConfirmationDialog",
+      "path": "cvkg-components/src/dialog.rs",
+      "category": "src"
+    },
+    {
+      "name": "ConsentGate",
+      "path": "cvkg-components/src/consent_gate.rs",
+      "category": "src"
+    },
+    {
+      "name": "ConstraintOverlay",
+      "path": "cvkg-components/src/devtools.rs",
+      "category": "src"
+    },
+    {
+      "name": "ContextMenu",
+      "path": "cvkg-components/src/context_menu.rs",
+      "category": "src"
+    },
+    {
+      "name": "ContextMenuItem",
+      "path": "cvkg-components/src/context_menu.rs",
+      "category": "src"
+    },
+    {
+      "name": "CooldownOverlay",
+      "path": "cvkg-components/src/visual/cooldown.rs",
+      "category": "visual"
+    },
+    {
+      "name": "CopyButton",
+      "path": "cvkg-components/src/interactive/clipboard.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "CopyToolbar",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "CreativeComponent",
+      "path": "cvkg-components/src/bragi_creative.rs",
+      "category": "src"
+    },
+    {
+      "name": "CutButton",
+      "path": "cvkg-components/src/interactive/clipboard.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "DPadControl",
+      "path": "cvkg-components/src/game/dpad.rs",
+      "category": "game"
+    },
+    {
+      "name": "DainnSkill",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "DataGridColumn",
+      "path": "cvkg-components/src/data_grid.rs",
+      "category": "src"
+    },
+    {
+      "name": "DataTable",
+      "path": "cvkg-components/src/virtual_table.rs",
+      "category": "src"
+    },
+    {
+      "name": "DataTrail",
+      "path": "cvkg-components/src/consent_gate.rs",
+      "category": "src"
+    },
+    {
+      "name": "Date",
+      "path": "cvkg-components/src/calendar.rs",
+      "category": "src"
+    },
+    {
+      "name": "DatePicker",
+      "path": "cvkg-components/src/datepicker.rs",
+      "category": "src"
+    },
+    {
+      "name": "DateRange",
+      "path": "cvkg-components/src/datepicker.rs",
+      "category": "src"
+    },
+    {
+      "name": "DateRangePicker",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "DateTimePicker",
+      "path": "cvkg-components/src/form_controls.rs",
+      "category": "src"
+    },
+    {
+      "name": "DesignToken",
+      "path": "cvkg-components/src/njord_theme.rs",
+      "category": "src"
+    },
+    {
+      "name": "DialogAction",
+      "path": "cvkg-components/src/container/modal.rs",
+      "category": "container"
+    },
+    {
+      "name": "DirectionProvider",
+      "path": "cvkg-components/src/direction.rs",
+      "category": "src"
+    },
+    {
+      "name": "DisclosureGroup",
+      "path": "cvkg-components/src/navigation.rs",
+      "category": "src"
+    },
+    {
+      "name": "Divider",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "DockItem",
+      "path": "cvkg-components/src/chrome/heimdall_dock.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "DockingWorkspace",
+      "path": "cvkg-components/src/docking_workspace.rs",
+      "category": "src"
+    },
+    {
+      "name": "DraggableCard",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "DraumaSkeleton",
+      "path": "cvkg-components/src/visual/decorators.rs",
+      "category": "visual"
+    },
+    {
+      "name": "Drawer",
+      "path": "cvkg-components/src/navigation.rs",
+      "category": "src"
+    },
+    {
+      "name": "DropVault",
+      "path": "cvkg-components/src/drop_vault.rs",
+      "category": "src"
+    },
+    {
+      "name": "Dropdown",
+      "path": "cvkg-components/src/interactive/select.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "DropdownItem",
+      "path": "cvkg-components/src/dropdown_menu.rs",
+      "category": "src"
+    },
+    {
+      "name": "DropdownMenu",
+      "path": "cvkg-components/src/dropdown_menu.rs",
+      "category": "src"
+    },
+    {
+      "name": "DummyRenderer",
+      "path": "cvkg-components/src/card.rs",
+      "category": "src"
+    },
+    {
+      "name": "DvalinMedia",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "DynamicIsland",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "Editable",
+      "path": "cvkg-components/src/editable.rs",
+      "category": "src"
+    },
+    {
+      "name": "EditorState",
+      "path": "cvkg-components/src/text_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "EikonaForm",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "EmptyState",
+      "path": "cvkg-components/src/visual/empty_state.rs",
+      "category": "visual"
+    },
+    {
+      "name": "ExecutionEngine",
+      "path": "cvkg-components/src/multi_agent_orchestrator/engine.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "ExpandableCard",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "ExtendedFAB",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "FAB",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "FafnirAccordion",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "FafnirOTP",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "FeatureGrid",
+      "path": "cvkg-components/src/landing/feature_grid.rs",
+      "category": "landing"
+    },
+    {
+      "name": "FeatureItem",
+      "path": "cvkg-components/src/landing/feature_grid.rs",
+      "category": "landing"
+    },
+    {
+      "name": "FenrirCode",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "FenrirNode",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "FileItem",
+      "path": "cvkg-components/src/file_tree.rs",
+      "category": "src"
+    },
+    {
+      "name": "FlexBox",
+      "path": "cvkg-components/src/container/flex.rs",
+      "category": "container"
+    },
+    {
+      "name": "FlexiScope",
+      "path": "cvkg-components/src/flexiscope.rs",
+      "category": "src"
+    },
+    {
+      "name": "FloatingNavbar",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "FloatingText",
+      "path": "cvkg-components/src/visual/floating_text.rs",
+      "category": "visual"
+    },
+    {
+      "name": "FluxState",
+      "path": "cvkg-components/src/flux_layout.rs",
+      "category": "src"
+    },
+    {
+      "name": "FocusState",
+      "path": "cvkg-components/src/hlin_accessibility.rs",
+      "category": "src"
+    },
+    {
+      "name": "FocusTrap",
+      "path": "cvkg-components/src/keyboard_nav.rs",
+      "category": "src"
+    },
+    {
+      "name": "Focusable",
+      "path": "cvkg-components/src/keyboard_nav.rs",
+      "category": "src"
+    },
+    {
+      "name": "FontAxisPanel",
+      "path": "cvkg-components/src/font_axis_panel.rs",
+      "category": "src"
+    },
+    {
+      "name": "Form",
+      "path": "cvkg-components/src/form_validation.rs",
+      "category": "src"
+    },
+    {
+      "name": "FormBinder",
+      "path": "cvkg-components/src/form_binder.rs",
+      "category": "src"
+    },
+    {
+      "name": "FormBinding",
+      "path": "cvkg-components/src/form_binder.rs",
+      "category": "src"
+    },
+    {
+      "name": "FormField",
+      "path": "cvkg-components/src/form_validation.rs",
+      "category": "src"
+    },
+    {
+      "name": "FrekiBottomNav",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "FrekiDrawer",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "FreyrInspector",
+      "path": "cvkg-components/src/freyr_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "FullScreenCover",
+      "path": "cvkg-components/src/dialog.rs",
+      "category": "src"
+    },
+    {
+      "name": "FunnelChart",
+      "path": "cvkg-components/src/gpu_charts/funnel.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "FutharkFlow",
+      "path": "cvkg-components/src/effects.rs",
+      "category": "src"
+    },
+    {
+      "name": "Gallery",
+      "path": "cvkg-components/src/patterns.rs",
+      "category": "src"
+    },
+    {
+      "name": "Gantt",
+      "path": "cvkg-components/src/scheduler.rs",
+      "category": "src"
+    },
+    {
+      "name": "GanttTask",
+      "path": "cvkg-components/src/scheduler.rs",
+      "category": "src"
+    },
+    {
+      "name": "GarmSpeedDial",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "GaugeChart",
+      "path": "cvkg-components/src/gpu_charts/gauge.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "GerdTelemetry",
+      "path": "cvkg-components/src/gerd_telemetry.rs",
+      "category": "src"
+    },
+    {
+      "name": "GeriDialog",
+      "path": "cvkg-components/src/container/modal.rs",
+      "category": "container"
+    },
+    {
+      "name": "GeriPrompt",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "GeriSpark",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "GeriTransfer",
+      "path": "cvkg-components/src/interactive/hringrpagination.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "GinnungagapWindow",
+      "path": "cvkg-components/src/window.rs",
+      "category": "src"
+    },
+    {
+      "name": "GjallarAlert",
+      "path": "cvkg-components/src/hud.rs",
+      "category": "src"
+    },
+    {
+      "name": "GjallarSplitter",
+      "path": "cvkg-components/src/container/disclosure.rs",
+      "category": "container"
+    },
+    {
+      "name": "GradientStop",
+      "path": "cvkg-components/src/gradient.rs",
+      "category": "src"
+    },
+    {
+      "name": "GraniBreadcrumb",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "GraniRate",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "GraniSheet",
+      "path": "cvkg-components/src/container/modal.rs",
+      "category": "container"
+    },
+    {
+      "name": "GraphEdge",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "GraphInteractionState",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "GraphNode",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "Grid",
+      "path": "cvkg-components/src/grid.rs",
+      "category": "src"
+    },
+    {
+      "name": "Group",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "GroupBox",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "GullinSnip",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "GullinStat",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "GullveigInspector",
+      "path": "cvkg-components/src/gullveig_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "HStack",
+      "path": "cvkg-components/src/container/stacks.rs",
+      "category": "container"
+    },
+    {
+      "name": "HatiCarousel",
+      "path": "cvkg-components/src/visual/carousel.rs",
+      "category": "visual"
+    },
+    {
+      "name": "HatiSpinner",
+      "path": "cvkg-components/src/visual/spinner.rs",
+      "category": "visual"
+    },
+    {
+      "name": "HatiStream",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "HatiSwipe",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "HealthBar",
+      "path": "cvkg-components/src/game/health_bar.rs",
+      "category": "game"
+    },
+    {
+      "name": "HeatmapChart",
+      "path": "cvkg-components/src/gpu_charts/heatmap.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "HeidruMask",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "HeimdallDock",
+      "path": "cvkg-components/src/chrome/heimdall_dock.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "HeimdallSweep",
+      "path": "cvkg-components/src/effects.rs",
+      "category": "src"
+    },
+    {
+      "name": "Hero",
+      "path": "cvkg-components/src/landing/hero.rs",
+      "category": "landing"
+    },
+    {
+      "name": "HeroColorPanels",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "HighlightSegment",
+      "path": "cvkg-components/src/token_stream.rs",
+      "category": "src"
+    },
+    {
+      "name": "HiminnModal",
+      "path": "cvkg-components/src/window.rs",
+      "category": "src"
+    },
+    {
+      "name": "Histogram",
+      "path": "cvkg-components/src/gpu_charts/bar.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "HlinAccessibility",
+      "path": "cvkg-components/src/hlin_accessibility.rs",
+      "category": "src"
+    },
+    {
+      "name": "HlinNode",
+      "path": "cvkg-components/src/hlin_accessibility.rs",
+      "category": "src"
+    },
+    {
+      "name": "HolographicRunestone",
+      "path": "cvkg-components/src/holographic_runestone.rs",
+      "category": "src"
+    },
+    {
+      "name": "HoverCard",
+      "path": "cvkg-components/src/hover_card.rs",
+      "category": "src"
+    },
+    {
+      "name": "HringrPagination",
+      "path": "cvkg-components/src/interactive/hringrpagination.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "HrungnirSegmented",
+      "path": "cvkg-components/src/interactive/hrungnirsegmented.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "HuginChat",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "HuginContextMenu",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "HuginGhost",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "HuginHoverCard",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "Hvergelmir",
+      "path": "cvkg-components/src/shapes.rs",
+      "category": "src"
+    },
+    {
+      "name": "Icon",
+      "path": "cvkg-components/src/display.rs",
+      "category": "src"
+    },
+    {
+      "name": "Idavoll",
+      "path": "cvkg-components/src/shapes.rs",
+      "category": "src"
+    },
+    {
+      "name": "IdunnPersistence",
+      "path": "cvkg-components/src/idunn_persistence.rs",
+      "category": "src"
+    },
+    {
+      "name": "Image",
+      "path": "cvkg-components/src/image.rs",
+      "category": "src"
+    },
+    {
+      "name": "InfiniteCanvas",
+      "path": "cvkg-components/src/infinite_canvas.rs",
+      "category": "src"
+    },
+    {
+      "name": "Input",
+      "path": "cvkg-components/src/interactive/input.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "InputBar",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "InputGroup",
+      "path": "cvkg-components/src/input_group.rs",
+      "category": "src"
+    },
+    {
+      "name": "InputOTP",
+      "path": "cvkg-components/src/input_otp.rs",
+      "category": "src"
+    },
+    {
+      "name": "InputRef",
+      "path": "cvkg-components/src/computed_signal.rs",
+      "category": "src"
+    },
+    {
+      "name": "Item",
+      "path": "cvkg-components/src/item.rs",
+      "category": "src"
+    },
+    {
+      "name": "Kanban",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "KanbanCard",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "KanbanColumn",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "Kbd",
+      "path": "cvkg-components/src/kbd.rs",
+      "category": "src"
+    },
+    {
+      "name": "KeyboardShortcuts",
+      "path": "cvkg-components/src/keyboard_nav.rs",
+      "category": "src"
+    },
+    {
+      "name": "Label",
+      "path": "cvkg-components/src/form_controls.rs",
+      "category": "src"
+    },
+    {
+      "name": "Launcher",
+      "path": "cvkg-components/src/command_palette.rs",
+      "category": "src"
+    },
+    {
+      "name": "Layer",
+      "path": "cvkg-components/src/layer_system.rs",
+      "category": "src"
+    },
+    {
+      "name": "LayerSystem",
+      "path": "cvkg-components/src/layer_system.rs",
+      "category": "src"
+    },
+    {
+      "name": "LazyHGrid",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "LazyHStack",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "LazyVGrid",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "LazyVStack",
+      "path": "cvkg-components/src/container/stacks.rs",
+      "category": "container"
+    },
+    {
+      "name": "LegacyDatePicker",
+      "path": "cvkg-components/src/calendar.rs",
+      "category": "src"
+    },
+    {
+      "name": "LineChart",
+      "path": "cvkg-components/src/gpu_charts/line.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "LinearGradient",
+      "path": "cvkg-components/src/gradient.rs",
+      "category": "src"
+    },
+    {
+      "name": "Link",
+      "path": "cvkg-components/src/form_controls.rs",
+      "category": "src"
+    },
+    {
+      "name": "List",
+      "path": "cvkg-components/src/navigation.rs",
+      "category": "src"
+    },
+    {
+      "name": "ListItem",
+      "path": "cvkg-components/src/virtual_list.rs",
+      "category": "src"
+    },
+    {
+      "name": "Loader",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "Login",
+      "path": "cvkg-components/src/patterns.rs",
+      "category": "src"
+    },
+    {
+      "name": "LogoCarousel",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "LokiGlitch",
+      "path": "cvkg-components/src/effects.rs",
+      "category": "src"
+    },
+    {
+      "name": "Map",
+      "path": "cvkg-components/src/multimedia.rs",
+      "category": "src"
+    },
+    {
+      "name": "MapMarker",
+      "path": "cvkg-components/src/game/minimap.rs",
+      "category": "game"
+    },
+    {
+      "name": "Markdown",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "MarkdownEditor",
+      "path": "cvkg-components/src/bragi_creative.rs",
+      "category": "src"
+    },
+    {
+      "name": "Marquee",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "MemoryCluster",
+      "path": "cvkg-components/src/semantic_memory_explorer.rs",
+      "category": "src"
+    },
+    {
+      "name": "MemoryEdge",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "MemoryGraphViewer",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "MemoryNode",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "MemoryView",
+      "path": "cvkg-components/src/memory.rs",
+      "category": "src"
+    },
+    {
+      "name": "MentionInput",
+      "path": "cvkg-components/src/mention_input.rs",
+      "category": "src"
+    },
+    {
+      "name": "Menubar",
+      "path": "cvkg-components/src/navigation.rs",
+      "category": "src"
+    },
+    {
+      "name": "MerkiBadge",
+      "path": "cvkg-components/src/visual/decorators.rs",
+      "category": "visual"
+    },
+    {
+      "name": "MessageList",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "MicroFeedback",
+      "path": "cvkg-components/src/lib.rs",
+      "category": "src"
+    },
+    {
+      "name": "MidgardLines",
+      "path": "cvkg-components/src/effects.rs",
+      "category": "src"
+    },
+    {
+      "name": "MimirSpotlight",
+      "path": "cvkg-components/src/command_palette.rs",
+      "category": "src"
+    },
+    {
+      "name": "MimirsWell",
+      "path": "cvkg-components/src/visual/well.rs",
+      "category": "visual"
+    },
+    {
+      "name": "MiniMap",
+      "path": "cvkg-components/src/game/minimap.rs",
+      "category": "game"
+    },
+    {
+      "name": "Minimap",
+      "path": "cvkg-components/src/infinite_canvas.rs",
+      "category": "src"
+    },
+    {
+      "name": "MjolnirFrame",
+      "path": "cvkg-components/src/mjolnir_frame.rs",
+      "category": "src"
+    },
+    {
+      "name": "MjolnirSlider",
+      "path": "cvkg-components/src/mjolnir_slider.rs",
+      "category": "src"
+    },
+    {
+      "name": "ModelPicker",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "MorphBridge",
+      "path": "cvkg-components/src/morph_bridge.rs",
+      "category": "src"
+    },
+    {
+      "name": "MorphState",
+      "path": "cvkg-components/src/morph.rs",
+      "category": "src"
+    },
+    {
+      "name": "Morphed",
+      "path": "cvkg-components/src/morph.rs",
+      "category": "src"
+    },
+    {
+      "name": "Motion",
+      "path": "cvkg-components/src/motion.rs",
+      "category": "src"
+    },
+    {
+      "name": "MultiAgentOrchestrator",
+      "path": "cvkg-components/src/multi_agent_orchestrator/mod.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "MultiAgentPanel",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "MultiSelect",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "MultiStepLoader",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "MuninAvatar",
+      "path": "cvkg-components/src/visual/decorators.rs",
+      "category": "visual"
+    },
+    {
+      "name": "MuninMenubar",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "MuninPill",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "MuninSpy",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "NativeSelect",
+      "path": "cvkg-components/src/native_select.rs",
+      "category": "src"
+    },
+    {
+      "name": "NavbarMenu",
+      "path": "cvkg-components/src/layout_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "NavigationMenu",
+      "path": "cvkg-components/src/navigation.rs",
+      "category": "src"
+    },
+    {
+      "name": "NavigationSplitView",
+      "path": "cvkg-components/src/container/navigation.rs",
+      "category": "container"
+    },
+    {
+      "name": "NavigationStack",
+      "path": "cvkg-components/src/container/navigation.rs",
+      "category": "container"
+    },
+    {
+      "name": "NidhugMasonry",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "NidhugSplitter",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "NiflheimFrost",
+      "path": "cvkg-components/src/effects.rs",
+      "category": "src"
+    },
+    {
+      "name": "NiflheimSidebar",
+      "path": "cvkg-components/src/chrome/niflheim_sidebar.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "NjordTheme",
+      "path": "cvkg-components/src/njord_theme.rs",
+      "category": "src"
+    },
+    {
+      "name": "NodeExecutionState",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "NodeGraphEditor",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "NodeGraphPersistentState",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "NodeMetrics",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "NornirBar",
+      "path": "cvkg-components/src/chrome/nornir_bar.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "NotificationCenterPanel",
+      "path": "cvkg-components/src/notification_center.rs",
+      "category": "src"
+    },
+    {
+      "name": "NumberTicker",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "OnEnter",
+      "path": "cvkg-components/src/animation_triggers.rs",
+      "category": "src"
+    },
+    {
+      "name": "OnExit",
+      "path": "cvkg-components/src/animation_triggers.rs",
+      "category": "src"
+    },
+    {
+      "name": "OnHover",
+      "path": "cvkg-components/src/animation_triggers.rs",
+      "category": "src"
+    },
+    {
+      "name": "OnScroll",
+      "path": "cvkg-components/src/animation_triggers.rs",
+      "category": "src"
+    },
+    {
+      "name": "OracleOrb",
+      "path": "cvkg-components/src/oracle_orb.rs",
+      "category": "src"
+    },
+    {
+      "name": "OrchestratorEdge",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "OrchestratorLog",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "OrchestratorNode",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "OrchestratorRun",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "OrchestratorState",
+      "path": "cvkg-components/src/multi_agent_orchestrator/mod.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "OutlineNode",
+      "path": "cvkg-components/src/outline_view.rs",
+      "category": "src"
+    },
+    {
+      "name": "OutlineView",
+      "path": "cvkg-components/src/outline_view.rs",
+      "category": "src"
+    },
+    {
+      "name": "PaletteCommand",
+      "path": "cvkg-components/src/command_palette.rs",
+      "category": "src"
+    },
+    {
+      "name": "Panel",
+      "path": "cvkg-components/src/docking_workspace.rs",
+      "category": "src"
+    },
+    {
+      "name": "Participant",
+      "path": "cvkg-components/src/collaboration.rs",
+      "category": "src"
+    },
+    {
+      "name": "PasteButton",
+      "path": "cvkg-components/src/interactive/clipboard.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "PeerCursor",
+      "path": "cvkg-components/src/sync_weave.rs",
+      "category": "src"
+    },
+    {
+      "name": "PendingEdge",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "PerfOverlay",
+      "path": "cvkg-components/src/perf_overlay.rs",
+      "category": "src"
+    },
+    {
+      "name": "PhaseGate",
+      "path": "cvkg-components/src/phasegate.rs",
+      "category": "src"
+    },
+    {
+      "name": "PhoneInput",
+      "path": "cvkg-components/src/phone_input.rs",
+      "category": "src"
+    },
+    {
+      "name": "Picker",
+      "path": "cvkg-components/src/interactive/select.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "PieChart",
+      "path": "cvkg-components/src/gpu_charts/pie.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "PolygonFrame",
+      "path": "cvkg-components/src/shapes.rs",
+      "category": "src"
+    },
+    {
+      "name": "Popconfirm",
+      "path": "cvkg-components/src/popconfirm.rs",
+      "category": "src"
+    },
+    {
+      "name": "Popover",
+      "path": "cvkg-components/src/popover.rs",
+      "category": "src"
+    },
+    {
+      "name": "Port",
+      "path": "cvkg-components/src/node_graph_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "PricingCard",
+      "path": "cvkg-components/src/landing/pricing_table.rs",
+      "category": "landing"
+    },
+    {
+      "name": "PricingTable",
+      "path": "cvkg-components/src/landing/pricing_table.rs",
+      "category": "landing"
+    },
+    {
+      "name": "PromptChainVisualizer",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "PromptForge",
+      "path": "cvkg-components/src/prompt_forge.rs",
+      "category": "src"
+    },
+    {
+      "name": "PromptStep",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "Property",
+      "path": "cvkg-components/src/freyr_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "QRCode",
+      "path": "cvkg-components/src/qrcode.rs",
+      "category": "src"
+    },
+    {
+      "name": "QuickItem",
+      "path": "cvkg-components/src/command_palette.rs",
+      "category": "src"
+    },
+    {
+      "name": "RadarChart",
+      "path": "cvkg-components/src/gpu_charts/radar.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "RadialGradient",
+      "path": "cvkg-components/src/gradient.rs",
+      "category": "src"
+    },
+    {
+      "name": "RadialMenu",
+      "path": "cvkg-components/src/radial_menu.rs",
+      "category": "src"
+    },
+    {
+      "name": "RadialMenuItem",
+      "path": "cvkg-components/src/radial_menu.rs",
+      "category": "src"
+    },
+    {
+      "name": "RadioGroup",
+      "path": "cvkg-components/src/radio_group.rs",
+      "category": "src"
+    },
+    {
+      "name": "RadioOption",
+      "path": "cvkg-components/src/radio_group.rs",
+      "category": "src"
+    },
+    {
+      "name": "RangeChart",
+      "path": "cvkg-components/src/gpu_charts/range.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "RatatoChip",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "RatatoKey",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "RavenMessenger",
+      "path": "cvkg-components/src/raven_messenger.rs",
+      "category": "src"
+    },
+    {
+      "name": "ReasoningStep",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "ReasoningTraceInspector",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "RecurringRun",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "ReflectedInspector",
+      "path": "cvkg-components/src/reflected_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "RenderStats",
+      "path": "cvkg-components/src/gullveig_inspector.rs",
+      "category": "src"
+    },
+    {
+      "name": "Resizable",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "Responsive",
+      "path": "cvkg-components/src/responsive.rs",
+      "category": "src"
+    },
+    {
+      "name": "RetryConfig",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "RichText",
+      "path": "cvkg-components/src/richtext.rs",
+      "category": "src"
+    },
+    {
+      "name": "RichTextState",
+      "path": "cvkg-components/src/bragi_creative.rs",
+      "category": "src"
+    },
+    {
+      "name": "RichTreeView",
+      "path": "cvkg-components/src/tree_view.rs",
+      "category": "src"
+    },
+    {
+      "name": "RippleButton",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "RuneGlyph",
+      "path": "cvkg-components/src/ornamental/mjolnir_frame_ext.rs",
+      "category": "ornamental"
+    },
+    {
+      "name": "RuneInspector",
+      "path": "cvkg-components/src/chrome/rune_inspector.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "RuneScript",
+      "path": "cvkg-components/src/visual/effects.rs",
+      "category": "visual"
+    },
+    {
+      "name": "RunesCard",
+      "path": "cvkg-components/src/card.rs",
+      "category": "src"
+    },
+    {
+      "name": "RunesTable",
+      "path": "cvkg-components/src/data_grid.rs",
+      "category": "src"
+    },
+    {
+      "name": "RunestoneDecoder",
+      "path": "cvkg-components/src/runestone_decoder.rs",
+      "category": "src"
+    },
+    {
+      "name": "RunestoneEditor",
+      "path": "cvkg-components/src/runestone_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "RunicTooltip",
+      "path": "cvkg-components/src/visual/effects.rs",
+      "category": "visual"
+    },
+    {
+      "name": "SagaAccordion",
+      "path": "cvkg-components/src/container/disclosure.rs",
+      "category": "container"
+    },
+    {
+      "name": "SagaItem",
+      "path": "cvkg-components/src/container/disclosure.rs",
+      "category": "container"
+    },
+    {
+      "name": "SankeyChart",
+      "path": "cvkg-components/src/gpu_charts/sankey.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "ScatterPlot",
+      "path": "cvkg-components/src/gpu_charts/scatter.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "ScheduleConfig",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "Scheduler",
+      "path": "cvkg-components/src/scheduler.rs",
+      "category": "src"
+    },
+    {
+      "name": "SchedulerEvent",
+      "path": "cvkg-components/src/scheduler.rs",
+      "category": "src"
+    },
+    {
+      "name": "ScopeThreshold",
+      "path": "cvkg-components/src/flexiscope.rs",
+      "category": "src"
+    },
+    {
+      "name": "ScribingStone",
+      "path": "cvkg-components/src/scribing_stone.rs",
+      "category": "src"
+    },
+    {
+      "name": "ScriptConnection",
+      "path": "cvkg-components/src/skadi_scripting.rs",
+      "category": "src"
+    },
+    {
+      "name": "ScriptNode",
+      "path": "cvkg-components/src/skadi_scripting.rs",
+      "category": "src"
+    },
+    {
+      "name": "ScrollArea",
+      "path": "cvkg-components/src/display.rs",
+      "category": "src"
+    },
+    {
+      "name": "ScrollState",
+      "path": "cvkg-components/src/container/scroll.rs",
+      "category": "container"
+    },
+    {
+      "name": "ScrollView",
+      "path": "cvkg-components/src/container/scroll.rs",
+      "category": "container"
+    },
+    {
+      "name": "SearchField",
+      "path": "cvkg-components/src/form_controls.rs",
+      "category": "src"
+    },
+    {
+      "name": "SearchState",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "SearchSuggestions",
+      "path": "cvkg-components/src/form_controls.rs",
+      "category": "src"
+    },
+    {
+      "name": "Section",
+      "path": "cvkg-components/src/navigation.rs",
+      "category": "src"
+    },
+    {
+      "name": "SecureField",
+      "path": "cvkg-components/src/interactive/button.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "SecurityRole",
+      "path": "cvkg-components/src/tyr_security.rs",
+      "category": "src"
+    },
+    {
+      "name": "Select",
+      "path": "cvkg-components/src/interactive/select.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "SemanticMemoryExplorer",
+      "path": "cvkg-components/src/semantic_memory_explorer.rs",
+      "category": "src"
+    },
+    {
+      "name": "Separator",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    },
+    {
+      "name": "SessionInfo",
+      "path": "cvkg-components/src/tyr_security.rs",
+      "category": "src"
+    },
+    {
+      "name": "SessionRestore",
+      "path": "cvkg-components/src/idunn_persistence.rs",
+      "category": "src"
+    },
+    {
+      "name": "Settings",
+      "path": "cvkg-components/src/patterns.rs",
+      "category": "src"
+    },
+    {
+      "name": "SettingsForm",
+      "path": "cvkg-components/src/container/disclosure.rs",
+      "category": "container"
+    },
+    {
+      "name": "Shape",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "SheetModifier",
+      "path": "cvkg-components/src/container/modal.rs",
+      "category": "container"
+    },
+    {
+      "name": "ShieldWall",
+      "path": "cvkg-components/src/shield_wall.rs",
+      "category": "src"
+    },
+    {
+      "name": "ShimmerButton",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "Shortcut",
+      "path": "cvkg-components/src/keyboard_nav.rs",
+      "category": "src"
+    },
+    {
+      "name": "SidePanel",
+      "path": "cvkg-components/src/m3_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "SidebarItem",
+      "path": "cvkg-components/src/chrome/niflheim_sidebar.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "SkadiScripting",
+      "path": "cvkg-components/src/skadi_scripting.rs",
+      "category": "src"
+    },
+    {
+      "name": "Skeleton",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "SkillDef",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "SkillRegistry",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "Skjaldborg",
+      "path": "cvkg-components/src/shapes.rs",
+      "category": "src"
+    },
+    {
+      "name": "SkollProgress",
+      "path": "cvkg-components/src/visual/progress.rs",
+      "category": "visual"
+    },
+    {
+      "name": "SkollPulse",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "SkollTime",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "SkollTimeline",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "SleipnFlow",
+      "path": "cvkg-components/src/ai_components.rs",
+      "category": "src"
+    },
+    {
+      "name": "SleipnirGait",
+      "path": "cvkg-components/src/visual/effects.rs",
+      "category": "visual"
+    },
+    {
+      "name": "Slider",
+      "path": "cvkg-components/src/interactive/button.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "Sonner",
+      "path": "cvkg-components/src/sonner.rs",
+      "category": "src"
+    },
+    {
+      "name": "SonnerToast",
+      "path": "cvkg-components/src/sonner.rs",
+      "category": "src"
+    },
+    {
+      "name": "Spacer",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "SparkLineChart",
+      "path": "cvkg-components/src/gpu_charts/line.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "SplitPane",
+      "path": "cvkg-components/src/docking_workspace.rs",
+      "category": "src"
+    },
+    {
+      "name": "SpringState",
+      "path": "cvkg-components/src/integration/mod.rs",
+      "category": "integration"
+    },
+    {
+      "name": "StatefulButton",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "StatusBar",
+      "path": "cvkg-components/src/visual/progress.rs",
+      "category": "visual"
+    },
+    {
+      "name": "StatusSegment",
+      "path": "cvkg-components/src/visual/progress.rs",
+      "category": "visual"
+    },
+    {
+      "name": "Stepper",
+      "path": "cvkg-components/src/interactive/button.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "SuggestionChips",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "SvadilVeil",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "SvgCanvas",
+      "path": "cvkg-components/src/bragi_creative.rs",
+      "category": "src"
+    },
+    {
+      "name": "SvgElement",
+      "path": "cvkg-components/src/bragi_creative.rs",
+      "category": "src"
+    },
+    {
+      "name": "SyncEditor",
+      "path": "cvkg-components/src/sync_weave.rs",
+      "category": "src"
+    },
+    {
+      "name": "SyncWeave",
+      "path": "cvkg-components/src/sync_weave.rs",
+      "category": "src"
+    },
+    {
+      "name": "Tab",
+      "path": "cvkg-components/src/docking_workspace.rs",
+      "category": "src"
+    },
+    {
+      "name": "TableColumn",
+      "path": "cvkg-components/src/virtual_table.rs",
+      "category": "src"
+    },
+    {
+      "name": "Tabs",
+      "path": "cvkg-components/src/interactive/checkbox.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "TacticalGauge",
+      "path": "cvkg-components/src/hud.rs",
+      "category": "src"
+    },
+    {
+      "name": "Tag",
+      "path": "cvkg-components/src/form_controls.rs",
+      "category": "src"
+    },
+    {
+      "name": "TagInput",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "TelemetryOverlay",
+      "path": "cvkg-components/src/devtools.rs",
+      "category": "src"
+    },
+    {
+      "name": "TelemetryPoint",
+      "path": "cvkg-components/src/gerd_telemetry.rs",
+      "category": "src"
+    },
+    {
+      "name": "TelemetrySeries",
+      "path": "cvkg-components/src/gerd_telemetry.rs",
+      "category": "src"
+    },
+    {
+      "name": "TelemetryView",
+      "path": "cvkg-components/src/visual/telemetry.rs",
+      "category": "visual"
+    },
+    {
+      "name": "TestimonialCard",
+      "path": "cvkg-components/src/landing/testimonial_card.rs",
+      "category": "landing"
+    },
+    {
+      "name": "TestimonialItem",
+      "path": "cvkg-components/src/landing/testimonial_card.rs",
+      "category": "landing"
+    },
+    {
+      "name": "Text",
+      "path": "cvkg-components/src/primitive.rs",
+      "category": "src"
+    },
+    {
+      "name": "TextAnimate",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "TextEditor",
+      "path": "cvkg-components/src/text_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "TextShimmer",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "TextStyle",
+      "path": "cvkg-components/src/richtext.rs",
+      "category": "src"
+    },
+    {
+      "name": "Textarea",
+      "path": "cvkg-components/src/interactive/textarea.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "ThemeSwitch",
+      "path": "cvkg-components/src/theme_switch.rs",
+      "category": "src"
+    },
+    {
+      "name": "ThemeVariant",
+      "path": "cvkg-components/src/njord_theme.rs",
+      "category": "src"
+    },
+    {
+      "name": "Themed",
+      "path": "cvkg-components/src/theme.rs",
+      "category": "src"
+    },
+    {
+      "name": "TimePicker",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "TimelineEditor",
+      "path": "cvkg-components/src/timeline_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "TimelineKeyframe",
+      "path": "cvkg-components/src/timeline_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "TimelineTrack",
+      "path": "cvkg-components/src/timeline_editor.rs",
+      "category": "src"
+    },
+    {
+      "name": "Toast",
+      "path": "cvkg-components/src/toast.rs",
+      "category": "src"
+    },
+    {
+      "name": "ToastManager",
+      "path": "cvkg-components/src/toast.rs",
+      "category": "src"
+    },
+    {
+      "name": "Toggle",
+      "path": "cvkg-components/src/interactive/button.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "ToggleGroup",
+      "path": "cvkg-components/src/toggle_group.rs",
+      "category": "src"
+    },
+    {
+      "name": "TokenInfo",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "TokenStream",
+      "path": "cvkg-components/src/token_stream.rs",
+      "category": "src"
+    },
+    {
+      "name": "TokenStreamViewer",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "TokenUsage",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "ToolCard",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "ToolInvocation",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "ToolInvocationInspector",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "ToolbarSearchField",
+      "path": "cvkg-components/src/chrome/valkyrie_toolbar.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "ToolbarSegmented",
+      "path": "cvkg-components/src/chrome/valkyrie_toolbar.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "TrailSource",
+      "path": "cvkg-components/src/consent_gate.rs",
+      "category": "src"
+    },
+    {
+      "name": "TreeViewNode",
+      "path": "cvkg-components/src/tree_view.rs",
+      "category": "src"
+    },
+    {
+      "name": "TreemapChart",
+      "path": "cvkg-components/src/gpu_charts/treemap.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "TreemapNode",
+      "path": "cvkg-components/src/gpu_charts/treemap.rs",
+      "category": "gpu_charts"
+    },
+    {
+      "name": "TriggerSpring",
+      "path": "cvkg-components/src/animation_triggers.rs",
+      "category": "src"
+    },
+    {
+      "name": "TrustMark",
+      "path": "cvkg-components/src/trustmark.rs",
+      "category": "src"
+    },
+    {
+      "name": "TypewriterEffect",
+      "path": "cvkg-components/src/text_anim.rs",
+      "category": "src"
+    },
+    {
+      "name": "Typography",
+      "path": "cvkg-components/src/display.rs",
+      "category": "src"
+    },
+    {
+      "name": "TyrCalendar",
+      "path": "cvkg-components/src/calendar.rs",
+      "category": "src"
+    },
+    {
+      "name": "TyrSecurity",
+      "path": "cvkg-components/src/tyr_security.rs",
+      "category": "src"
+    },
+    {
+      "name": "UndoRedo",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "UrdrEvent",
+      "path": "cvkg-components/src/visual/decorators.rs",
+      "category": "visual"
+    },
+    {
+      "name": "UrdrTimeline",
+      "path": "cvkg-components/src/visual/decorators.rs",
+      "category": "visual"
+    },
+    {
+      "name": "UserMessage",
+      "path": "cvkg-components/src/agent_chat.rs",
+      "category": "src"
+    },
+    {
+      "name": "VStack",
+      "path": "cvkg-components/src/container/stacks.rs",
+      "category": "container"
+    },
+    {
+      "name": "VTree",
+      "path": "cvkg-components/src/vtree.rs",
+      "category": "src"
+    },
+    {
+      "name": "VTreeNode",
+      "path": "cvkg-components/src/vtree.rs",
+      "category": "src"
+    },
+    {
+      "name": "ValhallaRating",
+      "path": "cvkg-components/src/interactive/hringrpagination.rs",
+      "category": "interactive"
+    },
+    {
+      "name": "ValidationError",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "ValidationResult",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "ValidationRule",
+      "path": "cvkg-components/src/advanced_forms.rs",
+      "category": "src"
+    },
+    {
+      "name": "ValkyrieAnalytics",
+      "path": "cvkg-components/src/visual/analytics.rs",
+      "category": "visual"
+    },
+    {
+      "name": "ValkyrieIndicator",
+      "path": "cvkg-components/src/valkyrie_indicator.rs",
+      "category": "src"
+    },
+    {
+      "name": "ValkyrieToolbar",
+      "path": "cvkg-components/src/chrome/valkyrie_toolbar.rs",
+      "category": "chrome"
+    },
+    {
+      "name": "VaultEntry",
+      "path": "cvkg-components/src/drop_vault.rs",
+      "category": "src"
+    },
+    {
+      "name": "VaultFile",
+      "path": "cvkg-components/src/drop_vault.rs",
+      "category": "src"
+    },
+    {
+      "name": "VdomInspector",
+      "path": "cvkg-components/src/devtools.rs",
+      "category": "src"
+    },
+    {
+      "name": "VedrHero",
+      "path": "cvkg-components/src/advanced.rs",
+      "category": "src"
+    },
+    {
+      "name": "Video",
+      "path": "cvkg-components/src/multimedia.rs",
+      "category": "src"
+    },
+    {
+      "name": "VirtualList",
+      "path": "cvkg-components/src/virtual_list.rs",
+      "category": "src"
+    },
+    {
+      "name": "VirtualTable",
+      "path": "cvkg-components/src/virtual_table.rs",
+      "category": "src"
+    },
+    {
+      "name": "WeaveChar",
+      "path": "cvkg-components/src/sync_weave.rs",
+      "category": "src"
+    },
+    {
+      "name": "WebhookConfig",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "WellEdge",
+      "path": "cvkg-components/src/visual/well.rs",
+      "category": "visual"
+    },
+    {
+      "name": "WellNode",
+      "path": "cvkg-components/src/visual/well.rs",
+      "category": "visual"
+    },
+    {
+      "name": "Wizard",
+      "path": "cvkg-components/src/patterns.rs",
+      "category": "src"
+    },
+    {
+      "name": "WorkflowEdge",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "WorkflowNode",
+      "path": "cvkg-components/src/ai_workflow_builder.rs",
+      "category": "src"
+    },
+    {
+      "name": "WorkflowTemplate",
+      "path": "cvkg-components/src/multi_agent_orchestrator/types.rs",
+      "category": "multi_agent_orchestrator"
+    },
+    {
+      "name": "WorkspaceSnapshot",
+      "path": "cvkg-components/src/idunn_persistence.rs",
+      "category": "src"
+    },
+    {
+      "name": "WorkspaceTabs",
+      "path": "cvkg-components/src/docking_workspace.rs",
+      "category": "src"
+    },
+    {
+      "name": "WorldSpaceConfig",
+      "path": "cvkg-components/src/integration/mod.rs",
+      "category": "integration"
+    },
+    {
+      "name": "WyrdHUD",
+      "path": "cvkg-components/src/wyrd_hud.rs",
+      "category": "src"
+    },
+    {
+      "name": "YggdrasilTree",
+      "path": "cvkg-components/src/file_tree.rs",
+      "category": "src"
+    },
+    {
+      "name": "YggdrasilTreeState",
+      "path": "cvkg-components/src/file_tree.rs",
+      "category": "src"
+    },
+    {
+      "name": "YggdrasilWindow",
+      "path": "cvkg-components/src/window.rs",
+      "category": "src"
+    },
+    {
+      "name": "ZStack",
+      "path": "cvkg-components/src/layout_primitives.rs",
+      "category": "src"
+    }
+  ]
+}

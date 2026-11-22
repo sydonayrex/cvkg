@@ -2,6 +2,7 @@
 pub mod agent_replay;
 pub mod asset_pipeline;
 pub mod build_pipeline;
+pub mod component_registry;
 pub mod config;
 pub mod dev_runtime;
 pub mod devtools;

@@ -145,6 +145,17 @@ enum Commands {
         #[arg(long)]
         features: Vec<String>,
     },
+    /// Inspect the generated component source registry
+    Component {
+        /// Action: list, view, or diff
+        #[arg(value_parser = ["list", "view", "diff"])]
+        action: String,
+        /// Component name for view or diff
+        name: Option<String>,
+        /// Local file to compare for diff
+        #[arg(long)]
+        local: Option<PathBuf>,
+    },
     /// Generate a custom theme from design tokens (JSON)
     Theme {
         /// Input JSON file with design tokens
@@ -575,6 +586,43 @@ pub fn run() {
                 println!("✅ Production Export Complete! Artifacts located in /dist");
             } else {
                 eprintln!("❌ Export failed. Ensure wasm-pack is installed.");
+            }
+        }
+        Commands::Component {
+            action,
+            name,
+            local,
+        } => {
+            let registry = match cvkg_cli::component_registry::ComponentRegistry::load_default() {
+                Ok(registry) => registry,
+                Err(error) => {
+                    eprintln!("component registry error: {error}");
+                    std::process::exit(1);
+                }
+            };
+            match action.as_str() {
+                "list" => {
+                    for entry in &registry.entries {
+                        println!("{}  {}", entry.name, entry.path);
+                    }
+                }
+                "view" => {
+                    let name = name.expect("component name required for view");
+                    match registry.source(&name) {
+                        Some(source) => println!("{source}"),
+                        None => eprintln!("unknown component: {name}"),
+                    }
+                }
+                "diff" => {
+                    let name = name.expect("component name required for diff");
+                    let local = local.expect("--local is required for diff");
+                    match registry.matches_local(&name, &local) {
+                        Some(true) => println!("in sync"),
+                        Some(false) => println!("differs from registry source"),
+                        None => eprintln!("cannot compare {name} with {}", local.display()),
+                    }
+                }
+                _ => unreachable!(),
             }
         }
         Commands::Add { name, features } => {
