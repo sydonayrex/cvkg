@@ -246,6 +246,15 @@ pub fn install_input_handlers(canvas_id: &str) -> Result<(), wasm_bindgen::JsVal
                 meta: event.meta_key(),
             };
             let action = match_shortcut(&key, &mods).map(str::to_string);
+            let registry = cvkg_core::ActionRegistry::new(vec![]);
+            let contexts = cvkg_core::KeyContextStack::new();
+            let _ = cvkg_core::dispatch_key_event(
+                &registry,
+                &contexts,
+                &key,
+                mods,
+                |_, _| action.is_some(),
+            );
 
             let announcement = INPUT_STATE.with(|slot| {
                 let mut state = slot.borrow_mut();

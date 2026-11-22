@@ -104,6 +104,10 @@ version = "0.2"
 version = "0.4"
 
 [[test]]
+name = "input_dispatch"
+path = "tests/input_dispatch.rs"
+
+[[test]]
 name = "action_dispatch"
 path = "tests/action_dispatch.rs"
 

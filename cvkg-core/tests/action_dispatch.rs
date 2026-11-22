@@ -9,14 +9,17 @@ fn binding_resolves_in_the_active_key_context() {
         Some("Palette"),
     );
     let registry = ActionRegistry::new(vec![binding]);
-    let shortcut = KeyShortcut::parse("Ctrl+K").expect("valid shortcut");
+    let modifiers = cvkg_core::KeyModifiers {
+        ctrl: true,
+        ..cvkg_core::KeyModifiers::default()
+    };
 
     let mut contexts = KeyContextStack::new();
     contexts.push("Palette");
-    assert_eq!(registry.resolve(&contexts, &shortcut), Some(focus));
+    assert_eq!(registry.resolve(&contexts, "k", modifiers), Some(focus));
 
     contexts.pop();
-    assert_eq!(registry.resolve(&contexts, &shortcut), None);
+    assert_eq!(registry.resolve(&contexts, "k", modifiers), None);
 }
 
 #[test]

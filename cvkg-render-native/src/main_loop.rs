@@ -1213,6 +1213,17 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     if let Some(vdom) = &state.vdom
                         && let Some(cvkg_event) = convert_keyboard_event(event, &self.modifiers)
                     {
+                        if let cvkg_core::Event::KeyDown { key, modifiers } = &cvkg_event {
+                            let registry = cvkg_core::ActionRegistry::new(vec![]);
+                            let contexts = cvkg_core::KeyContextStack::new();
+                            let _ = cvkg_core::dispatch_key_event(
+                                &registry,
+                                &contexts,
+                                key,
+                                *modifiers,
+                                |key, modifiers| self.view.on_key_event(key, modifiers),
+                            );
+                        }
                         vdom.dispatch_event(cvkg_event);
                         state.window.request_redraw();
                     }

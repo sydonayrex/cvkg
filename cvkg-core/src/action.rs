@@ -47,19 +47,22 @@ impl ActionRegistry {
         Self { bindings }
     }
 
-    pub fn resolve(&self, contexts: &KeyContextStack, shortcut: &KeyShortcut) -> Option<ActionId> {
+    pub fn resolve(
+        &self,
+        contexts: &KeyContextStack,
+        key: &str,
+        modifiers: crate::KeyModifiers,
+    ) -> Option<ActionId> {
         for context in contexts.stack.iter().rev() {
-            if let Some(binding) = self
-                .bindings
-                .iter()
-                .find(|binding| binding.context == Some(*context) && binding.shortcut == *shortcut)
-            {
+            if let Some(binding) = self.bindings.iter().find(|binding| {
+                binding.context == Some(*context) && binding.shortcut.matches(key, modifiers)
+            }) {
                 return Some(binding.action);
             }
         }
         self.bindings
             .iter()
-            .find(|binding| binding.context.is_none() && binding.shortcut == *shortcut)
+            .find(|binding| binding.context.is_none() && binding.shortcut.matches(key, modifiers))
             .map(|binding| binding.action)
     }
 }
