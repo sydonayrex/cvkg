@@ -83,6 +83,8 @@ pub mod action;
 pub use action::*;
 pub mod input_dispatch;
 pub use input_dispatch::*;
+pub mod bidi;
+pub use bidi::*;
 pub mod style;
 pub use style::*;
 pub mod limits;

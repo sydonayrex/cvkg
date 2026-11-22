@@ -1,7 +1,7 @@
-use cvkg_components::{Button, Text, VStack};
-use cvkg_components::prelude::DockingWorkspace;
 use cvkg_components::PanelPosition;
 use cvkg_components::VirtualList;
+use cvkg_components::prelude::DockingWorkspace;
+use cvkg_components::{Button, Text, VStack};
 use cvkg_core::{ElapsedTime, Rect, Renderer, View};
 
 struct MockRenderer {
@@ -537,4 +537,12 @@ fn test_qrcode_rendering() {
             .iter()
             .any(|c| c.contains("PushVNode(QRCode)"))
     );
+}
+
+#[test]
+fn text_exposes_resolved_rtl_direction() {
+    let ltr = cvkg_components::Text::new("hello");
+    let rtl = cvkg_components::Text::new("مرحبا");
+    assert!(!ltr.is_rtl());
+    assert!(rtl.is_rtl());
 }

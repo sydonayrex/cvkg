@@ -1,8 +1,8 @@
-use crate::theme;
 use crate::integration::{CompanionBundle, WorldSpaceConfig};
+use crate::theme;
 use crate::{FONT_SM, FONT_XS, FontWeight, Orientation, SPACE_SM, SPACE_XS};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
-use cvkg_core::{Never, Rect, Renderer, Size, View};
+use cvkg_core::{BidiDirection, Never, Rect, Renderer, Size, View};
 use cvkg_runic_text as runic;
 use std::sync::Arc;
 
@@ -13,6 +13,7 @@ pub struct Text {
     pub(crate) font_size: f32,
     pub(crate) font_weight: FontWeight,
     pub(crate) color: [f32; 4],
+    pub(crate) direction: BidiDirection,
     /// VDOM companion bundle — ARIA text semantics.
     pub companions: CompanionBundle,
     /// Optional 3D world-space placement.
@@ -29,11 +30,21 @@ impl Text {
             font_size: 14.0,
             font_weight: FontWeight::Regular,
             color: theme::text(),
+            direction: BidiDirection::Auto,
             companions: CompanionBundle::focusable()
                 .with_role("text")
                 .with_label(content_str),
             world: WorldSpaceConfig::default(),
         }
+    }
+
+    pub fn direction(mut self, direction: BidiDirection) -> Self {
+        self.direction = direction;
+        self
+    }
+
+    pub fn is_rtl(&self) -> bool {
+        self.direction.is_rtl(&self.content)
     }
 
     pub fn font_size(mut self, size: f32) -> Self {
@@ -112,7 +123,8 @@ impl View for Text {
 
         // Push a dedicated VNode so companions + 3D world-space attach to the Text
         // node itself rather than the parent.
-        renderer.push_vnode_with_companions(rect, "Text", self.companions.to_vec());
+        let vnode_name = if self.is_rtl() { "TextRTL" } else { "Text" };
+        renderer.push_vnode_with_companions(rect, vnode_name, self.companions.to_vec());
 
         self.world.begin(renderer, world_id);
 

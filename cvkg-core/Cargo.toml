@@ -108,6 +108,10 @@ name = "input_dispatch"
 path = "tests/input_dispatch.rs"
 
 [[test]]
+name = "bidi_tests"
+path = "tests/bidi_tests.rs"
+
+[[test]]
 name = "style_tests"
 path = "tests/style_tests.rs"
 
