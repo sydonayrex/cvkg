@@ -1336,21 +1336,10 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
             }
             AppEvent::AccessibilityInitialTreeRequested(winit_id) => {
                 if let Some(state) = self.window_manager.windows.get_mut(&winit_id) {
-                    if let Some(vdom) = &state.vdom {
-                        let root_id = vdom.root.map(|id| id.0).unwrap_or(1);
-                        let mut nodes = Vec::new();
-                        for (id, node) in &vdom.nodes {
-                            nodes.push((accesskit::NodeId(id.0), node.to_accesskit_node(vdom)));
-                        }
-                        let tree = accesskit::Tree::new(accesskit::NodeId(root_id));
-                        if let Some(adapter) = &mut state.accesskit_adapter {
-                            adapter.update_if_active(|| accesskit::TreeUpdate {
-                                nodes,
-                                tree: Some(tree),
-                                focus: accesskit::NodeId(root_id),
-                                tree_id: accesskit::TreeId::ROOT,
-                            });
-                        }
+                    if let Some(vdom) = &state.vdom
+                        && let Some(adapter) = &mut state.accesskit_adapter
+                    {
+                        adapter.update_if_active(|| vdom.build_accesskit_tree());
                     }
                 }
             }

@@ -1,4 +1,5 @@
 use cvkg_core::KvasirId;
+use cvkg_core::{Never, Rect, Renderer, View};
 use cvkg_vdom::{AriaProps, LayoutRect, VDom, VNode};
 use std::collections::HashMap;
 
@@ -24,7 +25,12 @@ fn make_node(id: KvasirId, layout: LayoutRect, children: Vec<KvasirId>) -> VNode
 }
 
 /// Helper: insert an event handler directly into VDom's event_handlers map.
-fn register_handler(vdom: &mut VDom, id: KvasirId, event_type: &str, handler: impl Fn(cvkg_core::Event) + Send + Sync + 'static) {
+fn register_handler(
+    vdom: &mut VDom,
+    id: KvasirId,
+    event_type: &str,
+    handler: impl Fn(cvkg_core::Event) + Send + Sync + 'static,
+) {
     use std::sync::Arc;
     vdom.event_handlers
         .entry(id)
@@ -42,16 +48,34 @@ fn register_handler(vdom: &mut VDom, id: KvasirId, event_type: &str, handler: im
 
 #[test]
 fn click_dispatches_through_vdom_not_gpu() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     let root_id = KvasirId::new();
     let button_id = KvasirId::new();
 
     // root at (0,0), button at (10,10,80,30) — click at absolute (50,25)
     // which maps to local (50-10, 25-10) = (40, 15) — inside button.
-    let root_node = make_node(root_id, LayoutRect { x: 0.0, y: 0.0, width: 400.0, height: 300.0 }, vec![button_id]);
-    let button_node = make_node(button_id, LayoutRect { x: 10.0, y: 10.0, width: 80.0, height: 30.0 }, vec![]);
+    let root_node = make_node(
+        root_id,
+        LayoutRect {
+            x: 0.0,
+            y: 0.0,
+            width: 400.0,
+            height: 300.0,
+        },
+        vec![button_id],
+    );
+    let button_node = make_node(
+        button_id,
+        LayoutRect {
+            x: 10.0,
+            y: 10.0,
+            width: 80.0,
+            height: 30.0,
+        },
+        vec![],
+    );
 
     let mut vdom = VDom::new();
     vdom.root = Some(root_id);
@@ -84,7 +108,11 @@ fn click_dispatches_through_vdom_not_gpu() {
     };
     vdom.dispatch_event(event);
 
-    assert_eq!(click_count.load(Ordering::SeqCst), 1, "handler should fire exactly once");
+    assert_eq!(
+        click_count.load(Ordering::SeqCst),
+        1,
+        "handler should fire exactly once"
+    );
 }
 
 // ── Test 2: Negative test — GpuRenderer has no event_handlers field ──
@@ -107,15 +135,33 @@ fn gpu_renderer_has_no_event_handlers_field() {
 
 #[test]
 fn vdom_is_sole_event_handler_owner() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     let root_id = KvasirId::new();
     let child_id = KvasirId::new();
 
     // root at (0,0), child at (10,10,80,30)
-    let root_node = make_node(root_id, LayoutRect { x: 0.0, y: 0.0, width: 200.0, height: 100.0 }, vec![child_id]);
-    let child_node = make_node(child_id, LayoutRect { x: 10.0, y: 10.0, width: 80.0, height: 30.0 }, vec![]);
+    let root_node = make_node(
+        root_id,
+        LayoutRect {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 100.0,
+        },
+        vec![child_id],
+    );
+    let child_node = make_node(
+        child_id,
+        LayoutRect {
+            x: 10.0,
+            y: 10.0,
+            width: 80.0,
+            height: 30.0,
+        },
+        vec![],
+    );
 
     let mut vdom = VDom::new();
     vdom.root = Some(root_id);
@@ -154,6 +200,40 @@ fn vdom_is_sole_event_handler_owner() {
 
     vdom.dispatch_event(event);
 
-    assert_eq!(child_count.load(Ordering::SeqCst), 1, "child handler fires once");
-    assert_eq!(root_count.load(Ordering::SeqCst), 1, "root handler fires once (bubbling)");
+    assert_eq!(
+        child_count.load(Ordering::SeqCst),
+        1,
+        "child handler fires once"
+    );
+    assert_eq!(
+        root_count.load(Ordering::SeqCst),
+        1,
+        "root handler fires once (bubbling)"
+    );
+}
+
+#[derive(Clone)]
+struct TreeView;
+
+impl View for TreeView {
+    type Body = Never;
+
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "Root");
+        renderer.push_vnode(Rect::new(10.0, 10.0, 80.0, 20.0), "Child");
+        renderer.pop_vnode();
+        renderer.pop_vnode();
+    }
+}
+
+#[test]
+fn full_accesskit_tree_contains_nested_nodes() {
+    let vdom = VDom::build(&TreeView, Rect::new(0.0, 0.0, 200.0, 100.0));
+    let tree = vdom.build_accesskit_tree();
+    assert!(tree.tree.is_some());
+    assert!(tree.nodes.len() >= 2, "expected root and child nodes");
 }

@@ -30,6 +30,8 @@ def source_files() -> list[Path]:
         if not (child.name.startswith("cvkg") or child.name == "demos"):
             continue
         for path in child.rglob("*.rs"):
+            if "src" not in path.parts:
+                continue
             if not any(part in SKIP_DIRS for part in path.parts):
                 files.append(path)
     return files

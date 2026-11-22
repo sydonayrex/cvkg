@@ -1,6 +1,5 @@
 # Approved zero-caller exceptions. Remove an entry once it has a caller.
 IS_BATCHING
-build_accesskit_tree
 notify_conflict
 set_prop_value
 validate_light_source
