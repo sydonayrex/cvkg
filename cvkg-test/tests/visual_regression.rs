@@ -149,3 +149,33 @@ async fn test_generate_niflheim_screenshot() {
     let golden = cvkg_test::GoldenImage::new("niflheim_hero");
     golden.assert_match(width, height, &pixels);
 }
+
+fn pack(c: [f32; 4]) -> u32 {
+    let p = |v: f32| (v.clamp(0.0, 1.0) * 255.0) as u32;
+    p(c[0]) | (p(c[1]) << 8) | (p(c[2]) << 16) | (p(c[3]) << 24)
+}
+
+fn reference_fixture(width: usize, height: usize) -> Vec<u32> {
+    let mut pixels = vec![pack([0.0, 0.0, 0.0, 1.0]); width * height];
+    for y in 8..24 {
+        for x in 8..24 {
+            pixels[y * width + x] = pack([1.0, 0.0, 0.0, 1.0]);
+        }
+    }
+    pixels
+}
+
+#[test]
+fn exact_software_fixture_matches_independent_reference() {
+    let mut renderer =
+        cvkg_render_software::SoftwareRenderer::with_color(32, 32, [0.0, 0.0, 0.0, 1.0]);
+    renderer.fill_rect(Rect::new(8.0, 8.0, 16.0, 16.0), [1.0, 0.0, 0.0, 1.0]);
+
+    let reference = reference_fixture(32, 32);
+    assert_eq!(renderer.framebuffer().pixels(), reference.as_slice());
+
+    let mut negative = reference;
+    let changed_color = pack([0.0, 1.0, 0.0, 1.0]);
+    negative[8 * 32 + 8] = changed_color;
+    assert_ne!(renderer.framebuffer().pixels(), negative.as_slice());
+}
