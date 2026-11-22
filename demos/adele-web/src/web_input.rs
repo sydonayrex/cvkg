@@ -104,6 +104,11 @@ pub fn hit_test(x: f32, y: f32) -> Option<usize> {
     })
 }
 
+#[cfg(test)]
+pub(crate) fn set_state_for_tests(state: InputState) {
+    INPUT_STATE.with(|slot| *slot.borrow_mut() = state);
+}
+
 /// Snapshot of the current input state.
 pub fn current_state() -> InputState {
     INPUT_STATE.with(|slot| slot.borrow().clone())
@@ -262,6 +267,7 @@ pub fn install_input_handlers(canvas_id: &str) -> Result<(), wasm_bindgen::JsVal
             });
             log::info!("[web-input] keydown key={key} action={announcement}");
             let _ = crate::announce_to_a11y(&announcement);
+            crate::schedule_render();
             if key == "Tab" || key == "Escape" {
                 return;
             }
@@ -285,6 +291,7 @@ pub fn install_input_handlers(canvas_id: &str) -> Result<(), wasm_bindgen::JsVal
                 }
             });
             let _ = crate::announce_to_a11y(&format!("Focused {announcement}"));
+            crate::schedule_render();
         });
     canvas.add_event_listener_with_callback("pointerdown", pointer.as_ref().unchecked_ref())?;
     pointer.forget();

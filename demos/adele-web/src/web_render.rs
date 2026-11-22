@@ -103,13 +103,50 @@ fn draw_demo_frame(renderer: &mut dyn Renderer, width: u32, height: u32) {
         renderer.fill_rect(Rect::new(44.0, 50.0 + i as f32 * 46.0, 180.0, 6.0), *color);
     }
 
-    renderer.fill_rect(Rect::new(288.0, 60.0, 320.0, 34.0), [0.0, 0.55, 0.75, 1.0]);
+    // Text field background, buffered text and caret (P1-5). The text is
+    // drawn as small blocks because the software renderer has no glyph
+    // rasterisation; the caret is a distinct bright bar so its position is
+    // visible and testable in both WebGPU and fallback frames.
+    renderer.fill_rect(Rect::new(288.0, 60.0, 320.0, 34.0), [0.02, 0.04, 0.07, 1.0]);
+    let state = crate::web_input::current_state();
+    let glyph_x = |index: usize| 296.0 + index as f32 * 10.0;
+    for (index, _) in state.text.char_indices().enumerate() {
+        renderer.fill_rect(
+            Rect::new(glyph_x(index), 70.0, 7.0, 12.0),
+            [0.55, 0.9, 1.0, 1.0],
+        );
+    }
+    renderer.fill_rect(
+        Rect::new(
+            glyph_x(state.caret.min(state.text.chars().count())),
+            68.0,
+            2.0,
+            16.0,
+        ),
+        [1.0, 0.2, 0.7, 1.0],
+    );
+
     renderer.fill_rect(Rect::new(288.0, 230.0, 240.0, 6.0), [1.0, 0.0, 0.55, 1.0]);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn caret_is_rendered_at_the_state_position() {
+        crate::web_input::set_state_for_tests(crate::web_input::InputState {
+            text: "abc".to_string(),
+            caret: 1,
+            ..Default::default()
+        });
+        let mut renderer = SoftwareRenderer::new(800, 600);
+        draw_demo_frame(&mut renderer, 800, 600);
+        let pixel = |x: usize, y: usize| renderer.framebuffer().pixels()[y * 800 + x];
+        // Caret for index 1 is at x=306..308; index 3 (x=326) has only text.
+        assert_eq!(pixel(306, 74) & 0xFF, 255); // opaque framebuffer
+        assert_ne!(pixel(306, 74), pixel(326, 74)); // caret vs no-caret
+    }
 
     #[test]
     fn demo_frame_draws_without_gpu() {

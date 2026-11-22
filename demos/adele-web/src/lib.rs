@@ -72,6 +72,52 @@ pub(crate) fn announce_to_a11y(_message: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Serialize repaints: rapid key events would otherwise start several async
+/// frames that race each other and can leave the canvas cleared.
+#[cfg(target_arch = "wasm32")]
+static RENDER_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+#[cfg(target_arch = "wasm32")]
+static RENDER_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Paint one frame, preferring WebGPU and falling back to software.
+#[cfg(target_arch = "wasm32")]
+async fn render_frame_once() {
+    match web_render::render_gpu_once("cvkg-canvas", 800, 600).await {
+        Ok(()) => log::info!("[web-render] WebGPU frame blitted to canvas"),
+        Err(error) => {
+            log::warn!("[web-render] WebGPU path failed, using software fallback: {error:?}");
+            match web_render::render_once("cvkg-canvas", 800, 600).await {
+                Ok(()) => log::info!("[web-render] software frame blitted to canvas"),
+                Err(error) => log::error!("[web-render] fallback failed: {error}"),
+            }
+        }
+    }
+}
+
+/// Request a repaint. Coalesces bursts of input events into at most one queued
+/// follow-up frame so the canvas never ends up half-updated.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn schedule_render() {
+    use std::sync::atomic::Ordering;
+    if RENDER_BUSY.swap(true, Ordering::SeqCst) {
+        RENDER_PENDING.store(true, Ordering::SeqCst);
+        return;
+    }
+    wasm_bindgen_futures::spawn_local(async {
+        loop {
+            render_frame_once().await;
+            if RENDER_PENDING.swap(false, Ordering::SeqCst) {
+                continue;
+            }
+            RENDER_BUSY.store(false, Ordering::SeqCst);
+            break;
+        }
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn schedule_render() {}
+
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
@@ -119,20 +165,7 @@ pub fn main() -> Result<(), JsValue> {
     // logged, never panics.
     #[cfg(target_arch = "wasm32")]
     if capabilities.is_supported() {
-        wasm_bindgen_futures::spawn_local(async {
-            match web_render::render_gpu_once("cvkg-canvas", 800, 600).await {
-                Ok(()) => log::info!("[web-render] WebGPU frame blitted to canvas"),
-                Err(error) => {
-                    log::warn!(
-                        "[web-render] WebGPU path failed, using software fallback: {error:?}"
-                    );
-                    match web_render::render_once("cvkg-canvas", 800, 600).await {
-                        Ok(()) => log::info!("[web-render] software frame blitted to canvas"),
-                        Err(error) => log::error!("[web-render] fallback failed: {error}"),
-                    }
-                }
-            }
-        });
+        schedule_render();
     }
 
     Ok(())

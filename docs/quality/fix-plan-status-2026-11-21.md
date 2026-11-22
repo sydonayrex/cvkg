@@ -117,6 +117,12 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Visual caret and coalesced repaints:** `web_render` draws the text buffer
+  and caret from `web_input` state into every frame; `schedule_render` uses a
+  busy/pending guard so rapid key events cannot race and clear the canvas.
+  Verified in Chromium: typing `ab` then `ArrowLeft` moves the rendered caret
+  from x=316 to x=306 with glyphs visible.
+
 - **WebKit fallback UX verified:** disabling WebGL2 in WebKitGTK produced the
   `Unsupported` capability tier, the expected warning, and a visible
   `role="alert"` notice with the documented message.
