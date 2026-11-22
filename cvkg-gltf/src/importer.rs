@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use cvkg_core::Limits;
 use cvkg_core::mesh::{Camera3D, Material3D, Mesh, Transform3D};
 use glam::{Quat, Vec3};
 use gltf::scene::Transform as GltfTransform;
@@ -20,7 +21,18 @@ use crate::types::{LoadedMesh, LoadedTexture, Node3D, Scene3D, TextureFormat};
 /// contains unsupported features (e.g. morph targets with non-standard
 /// accessor types).
 pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
+    load_gltf_with_limits(path, Limits::default())
+}
+
+/// Load a glTF file with an explicit budget for untrusted input.
+pub fn load_gltf_with_limits<P: AsRef<Path>>(path: P, limits: Limits) -> Result<Scene3D> {
     let path = path.as_ref();
+    let size = std::fs::metadata(path)
+        .with_context(|| format!("Failed to load glTF file (stat): {}", path.display()))?
+        .len() as usize;
+    limits
+        .checked_len(size)
+        .with_context(|| format!("glTF file exceeds budget: {}", path.display()))?;
     let (document, buffers, images) = gltf::import(path)
         .with_context(|| format!("Failed to load glTF file: {}", path.display()))?;
 
@@ -78,19 +90,33 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
         for channel in gltf_anim.channels() {
             let target_node = channel.target().node().index();
             let property = match channel.target().property() {
-                gltf::animation::Property::Translation => crate::types::AnimationProperty::Translation,
+                gltf::animation::Property::Translation => {
+                    crate::types::AnimationProperty::Translation
+                }
                 gltf::animation::Property::Rotation => crate::types::AnimationProperty::Rotation,
                 gltf::animation::Property::Scale => crate::types::AnimationProperty::Scale,
-                gltf::animation::Property::MorphTargetWeights => crate::types::AnimationProperty::MorphWeights,
+                gltf::animation::Property::MorphTargetWeights => {
+                    crate::types::AnimationProperty::MorphWeights
+                }
             };
             let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
-            let keyframes = reader.read_inputs().map(|i| i.collect()).unwrap_or_default();
-            let values = reader.read_outputs().map(|o| match o {
-                gltf::animation::util::ReadOutputs::Translations(t) => t.flatten().collect(),
-                gltf::animation::util::ReadOutputs::Rotations(r) => r.into_f32().flatten().collect(),
-                gltf::animation::util::ReadOutputs::Scales(s) => s.flatten().collect(),
-                gltf::animation::util::ReadOutputs::MorphTargetWeights(w) => w.into_f32().collect(),
-            }).unwrap_or_default();
+            let keyframes = reader
+                .read_inputs()
+                .map(|i| i.collect())
+                .unwrap_or_default();
+            let values = reader
+                .read_outputs()
+                .map(|o| match o {
+                    gltf::animation::util::ReadOutputs::Translations(t) => t.flatten().collect(),
+                    gltf::animation::util::ReadOutputs::Rotations(r) => {
+                        r.into_f32().flatten().collect()
+                    }
+                    gltf::animation::util::ReadOutputs::Scales(s) => s.flatten().collect(),
+                    gltf::animation::util::ReadOutputs::MorphTargetWeights(w) => {
+                        w.into_f32().collect()
+                    }
+                })
+                .unwrap_or_default();
             channels.push(crate::types::AnimationChannel3D {
                 target_node,
                 property,
@@ -108,9 +134,10 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
         let skeleton_root = gltf_skin.skeleton().map(|n| n.index());
         let joints = gltf_skin.joints().map(|n| n.index()).collect();
         let reader = gltf_skin.reader(|buffer| Some(&buffers[buffer.index()]));
-        let inverse_bind_matrices = reader.read_inverse_bind_matrices().map(|m| {
-            m.map(|mat| glam::Mat4::from_cols_array_2d(&mat)).collect()
-        }).unwrap_or_default();
+        let inverse_bind_matrices = reader
+            .read_inverse_bind_matrices()
+            .map(|m| m.map(|mat| glam::Mat4::from_cols_array_2d(&mat)).collect())
+            .unwrap_or_default();
         skins.push(crate::types::Skin3D {
             name,
             skeleton_root,
@@ -223,12 +250,12 @@ fn convert_primitive(
     // Joints_0 accessor
     let joint_indices: Vec<[u32; 4]> = match reader.read_joints(0) {
         Some(joints) => match joints {
-            gltf::mesh::util::ReadJoints::U8(iter) => {
-                iter.map(|j| [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32]).collect()
-            }
-            gltf::mesh::util::ReadJoints::U16(iter) => {
-                iter.map(|j| [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32]).collect()
-            }
+            gltf::mesh::util::ReadJoints::U8(iter) => iter
+                .map(|j| [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32])
+                .collect(),
+            gltf::mesh::util::ReadJoints::U16(iter) => iter
+                .map(|j| [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32])
+                .collect(),
         },
         None => vec![[0, 0, 0, 0]; positions.len()],
     };
@@ -236,15 +263,27 @@ fn convert_primitive(
     // Weights_0 accessor
     let joint_weights: Vec<[f32; 4]> = match reader.read_weights(0) {
         Some(weights) => match weights {
-            gltf::mesh::util::ReadWeights::U8(iter) => {
-                iter.map(|w| [w[0] as f32 / 255.0, w[1] as f32 / 255.0, w[2] as f32 / 255.0, w[3] as f32 / 255.0]).collect()
-            }
-            gltf::mesh::util::ReadWeights::U16(iter) => {
-                iter.map(|w| [w[0] as f32 / 65535.0, w[1] as f32 / 65535.0, w[2] as f32 / 65535.0, w[3] as f32 / 65535.0]).collect()
-            }
-            gltf::mesh::util::ReadWeights::F32(iter) => {
-                iter.collect()
-            }
+            gltf::mesh::util::ReadWeights::U8(iter) => iter
+                .map(|w| {
+                    [
+                        w[0] as f32 / 255.0,
+                        w[1] as f32 / 255.0,
+                        w[2] as f32 / 255.0,
+                        w[3] as f32 / 255.0,
+                    ]
+                })
+                .collect(),
+            gltf::mesh::util::ReadWeights::U16(iter) => iter
+                .map(|w| {
+                    [
+                        w[0] as f32 / 65535.0,
+                        w[1] as f32 / 65535.0,
+                        w[2] as f32 / 65535.0,
+                        w[3] as f32 / 65535.0,
+                    ]
+                })
+                .collect(),
+            gltf::mesh::util::ReadWeights::F32(iter) => iter.collect(),
         },
         None => vec![[0.0, 0.0, 0.0, 0.0]; positions.len()],
     };

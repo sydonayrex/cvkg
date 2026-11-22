@@ -20,7 +20,7 @@ mod importer;
 pub mod player;
 mod types;
 
-pub use importer::load_gltf;
+pub use importer::{load_gltf, load_gltf_with_limits};
 pub use types::{
     Animation3D, AnimationChannel3D, AnimationProperty, LoadedMesh, LoadedTexture, Node3D, Scene3D,
     Skin3D, TextureFormat,
