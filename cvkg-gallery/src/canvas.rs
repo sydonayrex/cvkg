@@ -1253,3 +1253,63 @@ impl cvkg_core::layout::LayoutView for SidebarShowcase {
     }
     fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) {}
 }
+
+/// Docking workspace showcase
+#[derive(Clone)]
+pub struct DockingWorkspaceShowcase;
+
+impl View for DockingWorkspaceShowcase {
+    type Body = cvkg_core::Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "DockingWorkspaceShowcase");
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::prelude::DockingWorkspace::new()
+            .panel("main", "Main", cvkg_components::Text::new("Dock content"), cvkg_components::PanelPosition::Center)
+            .active("main")
+            .render(renderer, child_rect);
+        renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size { width: 600.0, height: 400.0 }
+    }
+}
+
+impl cvkg_core::layout::LayoutView for DockingWorkspaceShowcase {
+    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) -> Size {
+        Size { width: 600.0, height: 400.0 }
+    }
+    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) {}
+}
+
+/// Virtual list showcase
+#[derive(Clone)]
+pub struct VirtualListShowcase;
+
+impl View for VirtualListShowcase {
+    type Body = cvkg_core::Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "VirtualListShowcase");
+        let child_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        cvkg_components::VirtualList::new((0..1000).collect::<Vec<i32>>(), 24.0, |item: &i32, _| {
+            cvkg_components::Text::new(format!("Item {item}"))
+        })
+        .render(renderer, child_rect);
+        renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size { width: 400.0, height: 300.0 }
+    }
+}
+
+impl cvkg_core::layout::LayoutView for VirtualListShowcase {
+    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) -> Size {
+        Size { width: 400.0, height: 300.0 }
+    }
+    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) {}
+}

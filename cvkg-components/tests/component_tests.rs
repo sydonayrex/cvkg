@@ -1,4 +1,7 @@
 use cvkg_components::{Button, Text, VStack};
+use cvkg_components::prelude::DockingWorkspace;
+use cvkg_components::PanelPosition;
+use cvkg_components::VirtualList;
 use cvkg_core::{ElapsedTime, Rect, Renderer, View};
 
 struct MockRenderer {
@@ -84,6 +87,23 @@ impl Renderer for MockRenderer {
     fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
         render_fn(self);
     }
+}
+
+#[test]
+fn docking_workspace_and_virtual_list_render_live_content() {
+    let mut renderer = MockRenderer::new();
+    let workspace = DockingWorkspace::new()
+        .panel("main", "Main", Text::new("content"), PanelPosition::Center)
+        .active("main");
+    workspace.render(&mut renderer, Rect::new(0.0, 0.0, 800.0, 600.0));
+    assert!(!renderer.commands.is_empty(), "docking workspace must draw");
+
+    let mut list_renderer = MockRenderer::new();
+    let list = VirtualList::new((0..100).collect::<Vec<i32>>(), 24.0, |item: &i32, _| {
+        Text::new(format!("item {item}"))
+    });
+    list.render(&mut list_renderer, Rect::new(0.0, 0.0, 200.0, 200.0));
+    assert!(!list_renderer.commands.is_empty(), "virtual list must draw");
 }
 
 #[test]

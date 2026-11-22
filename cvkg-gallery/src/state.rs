@@ -391,6 +391,14 @@ impl Registry {
                 "Sidebar", "Advanced", "Collapsible navigation sidebar (NiflheimSidebar)",
                 |_| AnyView::new(crate::canvas::SidebarShowcase)
             ),
+            ComponentMeta::new(
+                "DockingWorkspace", "Advanced", "Docking workspace with panels and split panes",
+                |_| AnyView::new(crate::canvas::DockingWorkspaceShowcase)
+            ),
+            ComponentMeta::new(
+                "VirtualList", "Advanced", "Virtualized list for large datasets",
+                |_| AnyView::new(crate::canvas::VirtualListShowcase)
+            ),
         ]
     }
 

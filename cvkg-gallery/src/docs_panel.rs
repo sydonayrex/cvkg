@@ -280,6 +280,15 @@ impl DocsPanel {
             "Sidebar" => vec![
                 ("items", "Vec<SidebarItem>", "vec![...]", "Navigation entries"),
             ],
+            "DockingWorkspace" => vec![
+                ("panels", "Vec<Panel>", "vec![...]", "Docked and floating panels"),
+                ("active", "usize", "None", "Active panel id"),
+            ],
+            "VirtualList" => vec![
+                ("data", "Vec<D>", "vec![...]", "Backing dataset"),
+                ("item_height", "f32", "24.0", "Row height"),
+                ("on_select", "fn(usize)", "None", "Selection handler"),
+            ],
             "VStack" => vec![
                 ("spacing", "f32", "8.0", "Gap between children"),
                 ("alignment", "Alignment", "Start", "Cross-axis alignment"),
@@ -385,6 +394,12 @@ let c = ColorPicker::new([0.2, 0.4, 0.8, 1.0]);"#,
 let c = CommandPalette::new().open();"#,
             "Sidebar" => r#"use cvkg_components::*;
 let s = NiflheimSidebar::new(vec![SidebarItem::new("home", "Home")]);"#,
+            "DockingWorkspace" => r#"use cvkg_components::*;
+let d = DockingWorkspace::new()
+    .panel("main", "Main", Text::new("Body"), PanelPosition::Center)
+    .active("main");"#,
+            "VirtualList" => r#"use cvkg_components::*;
+let v = VirtualList::new(vec![1, 2, 3], 24.0, |n: &i32, _| Text::new(n.to_string()));"#,
             "VStack" => r#"use cvkg_components::*;
 let s = VStack::new(8.0).child(Text::new("First")).child(Text::new("Second"));"#,
             "HStack" => r#"use cvkg_components::*;
