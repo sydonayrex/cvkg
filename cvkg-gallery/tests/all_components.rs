@@ -8,6 +8,38 @@ use cvkg_gallery::DocsPanel;
 use cvkg_gallery::state::{GalleryState, Registry};
 
 #[test]
+fn button_variant_matrix_renders_every_state() {
+    use cvkg_core::View;
+    use cvkg_gallery::variant_matrix::button_variants;
+
+    let variants = button_variants();
+    assert!(variants.len() >= 9, "expected at least nine button states");
+    for name in [
+        "default",
+        "hover",
+        "focus",
+        "active",
+        "disabled",
+        "loading",
+        "invalid",
+        "dark",
+        "light",
+        "small viewport",
+    ] {
+        assert!(
+            variants.iter().any(|variant| variant.name == name),
+            "{name} missing"
+        );
+    }
+
+    let rect = cvkg_core::Rect::new(0.0, 0.0, 200.0, 48.0);
+    for variant in variants {
+        let mut renderer = cvkg_core::testing::MockRenderer::new();
+        (variant.build)().render(&mut renderer, rect);
+    }
+}
+
+#[test]
 fn gallery_persists_docking_layout() {
     use cvkg_core::docking::{Floating, Layout, Node};
 

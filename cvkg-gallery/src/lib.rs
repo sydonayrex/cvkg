@@ -10,6 +10,7 @@ pub mod props_panel;
 pub mod sidebar;
 pub mod spotlight;
 pub mod state;
+pub mod variant_matrix;
 
 pub use self::app::GalleryApp;
 pub use self::canvas::{CanvasToolbar, GalleryCanvas};

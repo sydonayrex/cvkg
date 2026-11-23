@@ -155,3 +155,12 @@ ARIA `value`, a `disabled` flag and a single/multi-select description
 option; the selected option's label carries `, selected`. This closes the
 `listbox`/`option` part of gap G2 for the web/native capture path. Dispatch of
 `View::on_key_event` (G1) and per-item ARIA tree nodes remain open.
+
+## Update 2026-11-22 — Generated variant matrix
+
+`cvkg-gallery/src/variant_matrix.rs` enumerates Button states from the design
+system checklist: default, hover, focus, active, disabled, loading, invalid,
+dark, light, and small viewport. `cvkg-gallery/tests/all_components.rs` renders
+every variant through `MockRenderer`, so adding a state no longer requires a
+hand-written showcase. Hover and focus are represented by distinct visual
+variants; pointer-driven state simulation remains a separate task.
