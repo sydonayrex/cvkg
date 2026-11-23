@@ -4,6 +4,131 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{DeriveInput, FnArg, ItemFn, ItemStruct, Pat, Token, parse_macro_input};
 
+/// Derive generated form descriptors and validation calls.
+#[proc_macro_derive(Form, attributes(form))]
+pub fn derive_form(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let fields = match &input.data {
+        syn::Data::Struct(data) => match &data.fields {
+            syn::Fields::Named(named) => &named.named,
+            _ => {
+                return syn::Error::new_spanned(name, "Form requires named fields")
+                    .to_compile_error()
+                    .into();
+            }
+        },
+        _ => {
+            return syn::Error::new_spanned(name, "Form derives only on structs")
+                .to_compile_error()
+                .into();
+        }
+    };
+
+    let mut descriptors = Vec::new();
+    let mut validations = Vec::new();
+    for field in fields.iter() {
+        let ident = field.ident.as_ref().expect("named field");
+        let ident_str = ident.to_string();
+        let mut label = ident_str.clone();
+        let mut placeholder = String::new();
+        let mut field_type = "text".to_string();
+        let mut required = false;
+        let mut min_len = 0usize;
+
+        for attr in &field.attrs {
+            if !attr.path().is_ident("form") {
+                continue;
+            }
+            let Ok(metas) = attr.parse_args_with(
+                syn::punctuated::Punctuated::<syn::Meta, Token![,]>::parse_terminated,
+            ) else {
+                continue;
+            };
+            for meta in metas {
+                match meta {
+                    syn::Meta::NameValue(named) => {
+                        let syn::Expr::Lit(expr) = &named.value else {
+                            continue;
+                        };
+                        let text = match &expr.lit {
+                            syn::Lit::Str(value) => value.value(),
+                            syn::Lit::Int(value) => {
+                                value.base10_parse::<usize>().unwrap_or(0).to_string()
+                            }
+                            _ => continue,
+                        };
+                        if named.path.is_ident("label") {
+                            label = text;
+                        } else if named.path.is_ident("placeholder") {
+                            placeholder = text;
+                        } else if named.path.is_ident("field_type") {
+                            field_type = text;
+                        } else if named.path.is_ident("min_len") {
+                            min_len = text.parse().unwrap_or(0);
+                        }
+                    }
+                    syn::Meta::Path(path) if path.is_ident("required") => required = true,
+                    _ => {}
+                }
+            }
+        }
+
+        descriptors.push(quote! {
+            cvkg_components::form_validation::FieldDescriptor {
+                name: #ident_str,
+                label: #label,
+                placeholder: #placeholder,
+                field_type: #field_type,
+                required: #required,
+                min_length: #min_len,
+            }
+        });
+
+        let is_string = match &field.ty {
+            syn::Type::Path(path) => path
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "String"),
+            _ => false,
+        };
+        if is_string {
+            let error_name = ident_str.clone();
+            if required {
+                validations.push(quote! {
+                    if self.#ident.is_empty() {
+                        errors.push(format!("{} is required", #error_name));
+                    }
+                });
+            }
+            if min_len > 0 {
+                validations.push(quote! {
+                    if self.#ident.len() < #min_len {
+                        errors.push(format!("{} must be at least {} characters", #error_name, #min_len));
+                    }
+                });
+            }
+        }
+    }
+
+    quote! {
+        impl #name {
+            pub fn form_fields() -> Vec<cvkg_components::form_validation::FieldDescriptor> {
+                vec![#(#descriptors),*]
+            }
+
+            pub fn validate_form(&self) -> Vec<String> {
+                let mut errors = Vec::new();
+                #(#validations)*
+                errors
+            }
+        }
+    }
+    .into()
+}
+
 /// State attribute macro -- derives common traits for state structs
 ///
 /// Section 4.2: "expressed as Rust attributes via procedural macros"

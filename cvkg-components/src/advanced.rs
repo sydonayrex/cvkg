@@ -3,6 +3,8 @@ use crate::{RADIUS_LG, RADIUS_MD};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
 
+pub use crate::form_validation::FieldDescriptor;
+
 // Overlay & Disclosure
 #[derive(Clone, Default)]
 pub struct FafnirAccordion<H, C> {

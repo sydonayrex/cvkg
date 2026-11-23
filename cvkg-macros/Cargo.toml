@@ -31,6 +31,10 @@ path = "src/lib.rs"
 proc-macro = true
 
 [[test]]
+name = "form_derive_tests"
+path = "tests/form_derive_tests.rs"
+
+[[test]]
 name = "macro_tests"
 path = "tests/macro_tests.rs"
 

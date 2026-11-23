@@ -2,6 +2,17 @@ use crate::theme;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
 
+/// Static description of a generated form field.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FieldDescriptor {
+    pub name: &'static str,
+    pub label: &'static str,
+    pub placeholder: &'static str,
+    pub field_type: &'static str,
+    pub required: bool,
+    pub min_length: usize,
+}
+
 /// Validation rules that can be applied to form fields.
 #[derive(Clone, Debug)]
 pub enum ValidationRule {
