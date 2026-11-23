@@ -101,6 +101,11 @@ impl AnyView {
             inner: Box::new(view),
         }
     }
+
+    /// Accessibility and focus companions published by the wrapped view.
+    pub fn companion_states(&self) -> Vec<Box<dyn Companion>> {
+        self.inner.companion_states_erased()
+    }
 }
 
 impl View for AnyView {

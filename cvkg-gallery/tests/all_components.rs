@@ -8,6 +8,44 @@ use cvkg_gallery::DocsPanel;
 use cvkg_gallery::state::{GalleryState, Registry};
 
 #[test]
+fn inspector_toggles_from_the_gallery_key_dispatcher() {
+    use cvkg_core::{KeyModifiers, View};
+    use cvkg_gallery::GalleryApp;
+
+    let app = GalleryApp::new();
+    let state = GalleryState::global();
+    let before = state.lock().unwrap().inspector_visible;
+    let modifiers = KeyModifiers {
+        ctrl: true,
+        ..KeyModifiers::default()
+    };
+
+    assert!(app.on_key_event("i", modifiers));
+    assert_ne!(state.lock().unwrap().inspector_visible, before);
+
+    app.on_key_event("i", modifiers);
+    assert_eq!(state.lock().unwrap().inspector_visible, before);
+}
+
+#[test]
+fn inspector_returns_role_label_and_rect() {
+    use cvkg_components::Button;
+    use cvkg_core::{AnyView, Rect};
+    use cvkg_gallery::inspector::{InspectorNode, inspect_view};
+
+    let view = AnyView::new(Button::new("Inspect", || {}));
+    let rect = Rect::new(4.0, 8.0, 120.0, 32.0);
+    let nodes: Vec<InspectorNode> = inspect_view(&view, rect);
+
+    assert!(
+        nodes
+            .iter()
+            .any(|node| node.role == "button" && node.label == "Inspect" && node.rect == rect),
+        "expected button node with role, label and rect"
+    );
+}
+
+#[test]
 fn every_registered_component_has_generated_docs_summary() {
     for meta in Registry::all() {
         assert!(

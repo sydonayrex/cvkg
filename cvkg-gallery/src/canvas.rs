@@ -1,5 +1,6 @@
 //! Canvas — live component preview area with real showcase implementations.
 
+use crate::inspector::{InspectorOverlay, inspect_view};
 use crate::state::{GalleryState, Registry};
 use cvkg_components::interactive::hrungnirsegmented::{
     HrungnirSegmented as SegmentedControl, SegmentedStyle,
@@ -99,6 +100,17 @@ impl View for GalleryCanvas {
                 height: showcase_size.height,
             };
             showcase.render(renderer, showcase_rect);
+
+            if self.state.lock().unwrap().inspector_visible {
+                let nodes = inspect_view(&showcase, rect);
+                let overlay_rect = Rect::new(
+                    rect.x + rect.width - 260.0,
+                    rect.y + 8.0,
+                    250.0,
+                    (nodes.len() * 16 + 16) as f32,
+                );
+                InspectorOverlay::new(nodes).render(renderer, overlay_rect);
+            }
 
             if scale != 1.0 {
                 renderer.pop_transform();

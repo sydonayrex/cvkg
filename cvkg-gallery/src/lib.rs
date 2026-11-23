@@ -5,6 +5,7 @@ pub mod app;
 pub mod canvas;
 pub mod docs_panel;
 pub mod generated_docs;
+pub mod inspector;
 pub mod props_panel;
 pub mod sidebar;
 pub mod spotlight;

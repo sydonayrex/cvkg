@@ -127,6 +127,8 @@ pub struct GalleryState {
     pub spotlight_selected: usize,
     /// Props panel visibility.
     pub props_panel_open: bool,
+    /// Accessibility element inspector visibility.
+    pub inspector_visible: bool,
     /// Event log for callback debugging.
     pub event_log: Vec<String>,
     /// Recent components (persisted).

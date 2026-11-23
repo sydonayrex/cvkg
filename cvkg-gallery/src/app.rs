@@ -1,7 +1,7 @@
 //! Gallery application definition
 
 use super::{canvas, docs_panel, props_panel, sidebar, spotlight, state};
-use cvkg_core::{Rect, Renderer, Size, ThemeContext, View};
+use cvkg_core::{KeyModifiers, KeyShortcut, Rect, Renderer, Size, ThemeContext, View};
 use std::sync::{Arc, Mutex};
 
 /// Main gallery application.
@@ -92,6 +92,20 @@ impl View for GalleryApp {
     type Body = cvkg_core::Never;
     fn body(self) -> Self::Body {
         unreachable!()
+    }
+
+    fn key_shortcuts(&self) -> Vec<KeyShortcut> {
+        vec![KeyShortcut::new("i", "Toggle accessibility element inspector").with_ctrl()]
+    }
+
+    fn on_key_event(&self, key: &str, modifiers: KeyModifiers) -> bool {
+        if modifiers.ctrl && key.eq_ignore_ascii_case("i") {
+            let mut state = self.state.lock().unwrap();
+            state.inspector_visible = !state.inspector_visible;
+            true
+        } else {
+            false
+        }
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
