@@ -83,6 +83,8 @@ pub mod action;
 pub use action::*;
 pub mod input_dispatch;
 pub use input_dispatch::*;
+pub mod docking;
+pub use docking::*;
 pub mod entity;
 pub use entity::*;
 pub mod bidi;

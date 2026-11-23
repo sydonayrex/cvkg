@@ -540,6 +540,39 @@ fn test_qrcode_rendering() {
 }
 
 #[test]
+fn docking_workspace_builds_from_persisted_layout() {
+    use cvkg_components::docking_workspace::DockingPanelHost;
+    use cvkg_core::AnyView;
+    use cvkg_core::docking::{Axis, Floating, Layout, Node, Split};
+
+    struct Host;
+    impl DockingPanelHost for Host {
+        fn panel_body(&self, id: &str) -> Option<AnyView> {
+            Some(AnyView::new(cvkg_components::Text::new(id)))
+        }
+    }
+
+    let layout = Layout {
+        root: Node::Split(Split {
+            axis: Axis::Horizontal,
+            ratio: 0.5,
+            first: Box::new(Node::Panel(cvkg_core::docking::Panel { id: "left".into() })),
+            second: Box::new(Node::Floating(Floating {
+                panel_id: "logs".into(),
+                x: 10.0,
+                y: 10.0,
+                width: 100.0,
+                height: 50.0,
+            })),
+        }),
+    };
+
+    let workspace = cvkg_components::DockingWorkspace::from_layout(&layout, &Host);
+    assert_eq!(workspace.panel_count(), 2);
+    assert!(workspace.panel_ids().contains(&"logs".to_string()));
+}
+
+#[test]
 fn text_exposes_resolved_rtl_direction() {
     let ltr = cvkg_components::Text::new("hello");
     let rtl = cvkg_components::Text::new("مرحبا");

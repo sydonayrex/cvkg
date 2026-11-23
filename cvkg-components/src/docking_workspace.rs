@@ -1,6 +1,7 @@
 use crate::theme;
 use cvkg_core::{
     AnyView, Never, Rect, Renderer, Size, View,
+    docking::{Floating, Layout, Node, Panel as ModelPanel, Split, Tabs},
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
 
@@ -37,6 +38,91 @@ pub enum PanelPosition {
 impl Default for DockingWorkspace {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Supplies host-owned bodies for panel ids in a persisted layout.
+pub trait DockingPanelHost {
+    fn panel_body(&self, id: &str) -> Option<AnyView>;
+}
+
+impl DockingWorkspace {
+    /// Build a workspace from a persisted layout and a host that owns bodies.
+    pub fn from_layout(layout: &Layout, host: &dyn DockingPanelHost) -> Self {
+        let mut workspace = Self::new();
+        let mut ids = Vec::new();
+        collect_panel_ids(&layout.root, &mut ids);
+
+        for id in ids {
+            let Some(body) = host.panel_body(&id) else {
+                continue;
+            };
+            let position = position_for(&layout.root, &id).unwrap_or(PanelPosition::Center);
+            let floating = matches!(position, PanelPosition::Floating { .. });
+            workspace.panels.push(Panel {
+                id: id.clone(),
+                title: id,
+                content: body,
+                is_floating: floating,
+                is_docked: !floating,
+                position,
+            });
+        }
+        if !workspace.panels.is_empty() {
+            workspace.active_panel = Some(0);
+        }
+        workspace
+    }
+
+    pub fn panel_count(&self) -> usize {
+        self.panels.len()
+    }
+
+    pub fn panel_ids(&self) -> Vec<String> {
+        self.panels.iter().map(|panel| panel.id.clone()).collect()
+    }
+}
+
+fn collect_panel_ids(node: &Node, ids: &mut Vec<String>) {
+    let found = match node {
+        Node::Panel(ModelPanel { id }) => vec![id.clone()],
+        Node::Floating(Floating { panel_id, .. }) => vec![panel_id.clone()],
+        Node::Tabs(Tabs { tabs, .. }) => tabs.clone(),
+        Node::Split(Split { first, second, .. }) => {
+            collect_panel_ids(first, ids);
+            collect_panel_ids(second, ids);
+            return;
+        }
+    };
+    for id in found {
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+}
+
+fn position_for(node: &Node, id: &str) -> Option<PanelPosition> {
+    match node {
+        Node::Panel(ModelPanel { id: panel }) => (panel == id).then_some(PanelPosition::Center),
+        Node::Floating(Floating {
+            panel_id,
+            x,
+            y,
+            width,
+            height,
+        }) => (panel_id == id).then(|| PanelPosition::Floating {
+            x: *x,
+            y: *y,
+            width: *width,
+            height: *height,
+        }),
+        Node::Tabs(Tabs { tabs, .. }) => tabs
+            .iter()
+            .any(|tab| tab == id)
+            .then_some(PanelPosition::Center),
+        Node::Split(Split { first, second, .. }) => {
+            position_for(first, id).or_else(|| position_for(second, id))
+        }
     }
 }
 

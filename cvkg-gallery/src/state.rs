@@ -4,7 +4,7 @@ use cvkg_components::chrome::NiflheimSidebar;
 use cvkg_components::{
     Button, Dialog, HStack, Input, MimirSpotlight, Select, Slider, Text, Toggle, VStack,
 };
-use cvkg_core::{AnyView, Color, Rect, Size, View};
+use cvkg_core::{AnyView, Color, Layout, Rect, Size, View};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use urlencoding;
@@ -133,6 +133,10 @@ pub struct GalleryState {
     pub event_log: Vec<String>,
     /// Recent components (persisted).
     pub recent: Vec<String>,
+    /// Current docking layout tree.
+    pub docking_layout: Layout,
+    /// Serialized docking layout restored on load.
+    pub persisted_docking_layout: Option<String>,
     /// Persisted theme preference.
     pub persisted_theme: Option<GalleryTheme>,
     /// Persisted scale preference.
@@ -209,6 +213,11 @@ impl GalleryState {
             // Sidebar width restoration handled in sidebar render
         }
         self.expanded_categories = self.persisted_expanded_categories.clone();
+        if let Some(json) = &self.persisted_docking_layout {
+            if let Ok(layout) = Layout::from_json(json) {
+                self.docking_layout = layout;
+            }
+        }
     }
 
     /// Save current state to persistence.
@@ -218,6 +227,7 @@ impl GalleryState {
         self.persisted_canvas_bg = Some(self.canvas_bg);
         self.persisted_sidebar_width = Some(240.0); // TODO: get from sidebar render
         self.persisted_expanded_categories = self.expanded_categories.clone();
+        self.persisted_docking_layout = self.docking_layout.to_json().ok();
     }
 
     /// Serialize state for URL sharing.

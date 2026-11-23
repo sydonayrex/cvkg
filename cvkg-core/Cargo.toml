@@ -108,6 +108,10 @@ name = "input_dispatch"
 path = "tests/input_dispatch.rs"
 
 [[test]]
+name = "docking_model_tests"
+path = "tests/docking_model_tests.rs"
+
+[[test]]
 name = "entity_tests"
 path = "tests/entity_tests.rs"
 

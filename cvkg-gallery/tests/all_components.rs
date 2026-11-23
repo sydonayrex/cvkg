@@ -8,6 +8,30 @@ use cvkg_gallery::DocsPanel;
 use cvkg_gallery::state::{GalleryState, Registry};
 
 #[test]
+fn gallery_persists_docking_layout() {
+    use cvkg_core::docking::{Floating, Layout, Node};
+
+    let mut state = GalleryState::default();
+    state.docking_layout = Layout {
+        root: Node::Floating(Floating {
+            panel_id: "logs".into(),
+            x: 4.0,
+            y: 8.0,
+            width: 160.0,
+            height: 90.0,
+        }),
+    };
+    state.save_persisted();
+
+    let mut restored = GalleryState::default();
+    restored.persisted_docking_layout = state.persisted_docking_layout.clone();
+    restored.load_persisted();
+
+    assert_eq!(restored.docking_layout.node_count(), 1);
+    assert_eq!(restored.docking_layout, state.docking_layout);
+}
+
+#[test]
 fn inspector_toggles_from_the_gallery_key_dispatcher() {
     use cvkg_core::{KeyModifiers, View};
     use cvkg_gallery::GalleryApp;
