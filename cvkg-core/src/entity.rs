@@ -7,12 +7,20 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 /// A stable, typed handle into an [`EntityArena`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Entity<T> {
     index: usize,
     generation: u64,
     _marker: PhantomData<fn() -> T>,
 }
+
+impl<T> Clone for Entity<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for Entity<T> {}
 
 impl<T> Entity<T> {
     fn new(index: usize, generation: u64) -> Self {

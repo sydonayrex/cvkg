@@ -1,6 +1,6 @@
 # ADR 0005: Entity ownership
 
-- Status: Accepted, gallery migration remains open
+- Status: Accepted, gallery frame path migrated; write path still uses `State`/mutex
 - Date: 2026-11-22
 
 ## Context
@@ -31,6 +31,8 @@ reactive values. Entity handles are for app-owned state whose identity matters.
 
 ## Remaining work
 
-Migrate `GalleryState` from its global mutex to an entity handle and remove one
-lock from `GalleryCanvas::render`. Keep `State<T>` as the compatibility path
-until both gallery and demos use entity handles in production.
+`GalleryApp::render` publishes one entity-backed snapshot per frame, and
+`GalleryCanvas` reads that handle without taking the global mutex. Writes still
+go through `Arc<Mutex<GalleryState>>`. Migrating the write path to entity
+`update` calls is the next step; keep `State<T>` as the compatibility path
+until both the gallery and demos use entity handles in production.

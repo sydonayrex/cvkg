@@ -35,3 +35,10 @@ keeping the existing renderer split and the `State<T>` compatibility path.
 Consumers must move all workspace pins to `0.4.0` in the same commit. The
 release notes live in `CHANGELOG.md`; the fresh review lives in
 `plans/cross-review-2026-11-22-rerun.md`.
+
+## v0.4.1
+
+`v0.4.1` is a patch correction to `v0.4.0`. It completes the gallery frame-path
+migration from Task 18 and keeps all public signatures stable. The tag
+`v0.4.0` is immutable; consumers on `0.4.0` should move all pins to `0.4.1`
+together.

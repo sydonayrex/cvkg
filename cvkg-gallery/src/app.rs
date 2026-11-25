@@ -115,10 +115,14 @@ impl View for GalleryApp {
         // WHY here: the native renderer sets its own GPU-based theme context
         // before each frame. The gallery overrides it at the start of render
         // so all child components (sidebar, toolbar, canvas) see the right theme.
-        let gallery_theme = {
+        // One mutex read per frame publishes an entity-backed snapshot. Child
+        // views read that handle instead of taking the global lock again.
+        let frame_state = {
             let state = self.state.lock().unwrap();
-            state.theme
+            state.clone()
         };
+        state::GalleryState::set_frame_snapshot(&frame_state);
+        let gallery_theme = frame_state.theme;
         let theme_ctx = match gallery_theme {
             state::GalleryTheme::Light => ThemeContext::light(),
             state::GalleryTheme::Dark => ThemeContext::dark(),
@@ -140,11 +144,8 @@ impl View for GalleryApp {
         };
         cvkg_core::set_theme_context(theme_ctx);
 
-        // Get sidebar width from state
-        let sidebar_width = {
-            let state = self.state.lock().unwrap();
-            state.sidebar_width.max(240.0)
-        };
+        // Get sidebar width from the frame snapshot.
+        let sidebar_width = frame_state.sidebar_width.max(240.0);
 
         // Layout: Storybook Style
         // ┌──────────────────┬──────────────────────────────────────────┐

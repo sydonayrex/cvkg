@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.1 - 2026-11-22
+
+Patch release. Corrects the v0.4.0 release with the completed Task 18 Step 3.
+All workspace pins move to `0.4.1`.
+
+- `GalleryApp::render` publishes one entity-backed `GalleryState` snapshot per
+  frame; `GalleryCanvas` reads that handle without taking the global mutex.
+- `Entity<T>` is `Copy` for every `T`, allowing handles in thread-local arenas.
+- Added regression tests for the frame snapshot and the canvas render path.
+
 ## v0.4.0 - 2026-11-22
 
 Minor release. Consumers must pin every CVKG crate to `v0.4.0`; mixed

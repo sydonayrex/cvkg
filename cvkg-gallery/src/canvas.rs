@@ -21,9 +21,9 @@ impl GalleryCanvas {
     }
 
     fn get_current_showcase(&self) -> Option<AnyView> {
-        let state = self.state.lock().unwrap();
+        let state = GalleryState::frame_snapshot();
         let name = state.selected_component.as_ref()?;
-        Registry::find(name).map(|meta| (meta.factory)(&*state))
+        Registry::find(name).map(|meta| (meta.factory)(&state))
     }
 }
 
@@ -35,14 +35,9 @@ impl View for GalleryCanvas {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let showcase = self.get_current_showcase();
-        let scale = {
-            let state = self.state.lock().unwrap();
-            state.scale.factor()
-        };
-        let bg = {
-            let state = self.state.lock().unwrap();
-            state.canvas_bg
-        };
+        let frame_state = GalleryState::frame_snapshot();
+        let scale = frame_state.scale.factor();
+        let bg = frame_state.canvas_bg;
 
         // Apply theme background
         let bg_color = match bg {
@@ -101,7 +96,7 @@ impl View for GalleryCanvas {
             };
             showcase.render(renderer, showcase_rect);
 
-            if self.state.lock().unwrap().inspector_visible {
+            if frame_state.inspector_visible {
                 let nodes = inspect_view(&showcase, rect);
                 let overlay_rect = Rect::new(
                     rect.x + rect.width - 260.0,

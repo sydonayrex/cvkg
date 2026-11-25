@@ -4,7 +4,8 @@ use cvkg_components::chrome::NiflheimSidebar;
 use cvkg_components::{
     Button, Dialog, HStack, Input, MimirSpotlight, Select, Slider, Text, Toggle, VStack,
 };
-use cvkg_core::{AnyView, Color, Layout, Rect, Size, View};
+use cvkg_core::{AnyView, Color, Entity, EntityArena, Layout, Rect, Size, View};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use urlencoding;
@@ -153,6 +154,15 @@ pub struct GalleryState {
     pub dragging_sidebar: bool,
 }
 
+thread_local! {
+    /// Entity-backed snapshot of gallery state for one render thread.
+    static FRAME_STATE: RefCell<(EntityArena<GalleryState>, Entity<GalleryState>)> = {
+        let mut arena = EntityArena::new();
+        let entity = arena.insert(GalleryState::default());
+        RefCell::new((arena, entity))
+    };
+}
+
 impl GalleryState {
     /// Get or create the global state instance.
     pub fn global() -> Arc<Mutex<GalleryState>> {
@@ -160,6 +170,22 @@ impl GalleryState {
         INSTANCE
             .get_or_init(|| Arc::new(Mutex::new(GalleryState::default())))
             .clone()
+    }
+
+    /// Publish one frame's state into the entity-backed snapshot.
+    pub fn set_frame_snapshot(state: &GalleryState) {
+        FRAME_STATE.with(|cell| {
+            let (arena, entity) = &mut *cell.borrow_mut();
+            arena.update(*entity, |slot| *slot = state.clone());
+        });
+    }
+
+    /// Read the current frame snapshot without taking the global mutex.
+    pub fn frame_snapshot() -> GalleryState {
+        FRAME_STATE.with(|cell| {
+            let (arena, entity) = &*cell.borrow();
+            arena.get(*entity).unwrap_or_default()
+        })
     }
 
     /// Toggle a sidebar category expanded state.
