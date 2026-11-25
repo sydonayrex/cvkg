@@ -1,0 +1,11 @@
+[package]
+name = "cvkg-blocks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Block graph primitives for CVKG"
+
+[lib]
+name = "cvkg_blocks"
+path = "src/lib.rs"

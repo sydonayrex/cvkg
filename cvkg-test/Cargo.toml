@@ -57,6 +57,9 @@ cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.3.5" }
 glam = { version = "0.33" }
 cvkg-platform-core = { workspace = true }
 cvkg-platform-web = { workspace = true }
+cvkg-hooks = { workspace = true }
+cvkg-blocks = { workspace = true }
+cvkg-charts = { workspace = true }
 
 [[test]]
 name = "component_journey"
