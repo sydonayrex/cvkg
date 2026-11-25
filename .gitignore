@@ -2,6 +2,7 @@
 !/.gitignore
 
 target/
+node_modules/
 **/*.rs.bk
 .a0proj/
 **/*.snap.new

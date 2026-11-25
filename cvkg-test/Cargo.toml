@@ -8,14 +8,14 @@ repository.workspace = true
 description = "Automated visual regression testing harness for CVKG"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.4.3" }
-cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.4.3" }
+cvkg-core = { path = "../cvkg-core", version = "0.4.4" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.4.4" }
 image = "0.25"
 bytemuck = "1.25"
 pollster = "0.4"
 log = "0.4"
 env_logger = "0.11"
-cvkg-runic-text = { version = "0.4.3", path = "../cvkg-runic-text" }
+cvkg-runic-text = { version = "0.4.4", path = "../cvkg-runic-text" }
 
 # tokio's "full" feature pulls in mio, which cannot compile on wasm32-unknown-unknown.
 # This dependency is only used by native integration tests, so gate it off wasm.
@@ -24,28 +24,28 @@ tokio = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
 # Intercrate smoke coverage for infrastructure crates that had no tests/ dir.
-cvkg-accessibility = { path = "../cvkg-accessibility", version = "0.4.3" }
-cvkg-cli = { path = "../cvkg-cli", version = "0.4.3" }
-cvkg-compositor = { path = "../cvkg-compositor", version = "0.4.3" }
-cvkg-export-raster = { path = "../cvkg-export-raster", version = "0.4.3" }
-cvkg-game-hud = { path = "../cvkg-game-hud", version = "0.4.3" }
-cvkg-icons = { path = "../cvkg-icons", version = "0.4.3" }
-cvkg-materials = { path = "../cvkg-materials", version = "0.4.3" }
-cvkg-physics = { path = "../cvkg-physics", version = "0.4.3" }
-cvkg-reflect = { path = "../cvkg-reflect", version = "0.4.3" }
-cvkg-render-native = { path = "../cvkg-render-native", version = "0.4.3" }
-cvkg-render-software = { path = "../cvkg-render-software", version = "0.4.3" }
-cvkg-scheduler = { path = "../cvkg-scheduler", version = "0.4.3" }
-cvkg-svg-filters = { path = "../cvkg-svg-filters", version = "0.4.3" }
-cvkg-telemetry = { path = "../cvkg-telemetry", version = "0.4.3" }
+cvkg-accessibility = { path = "../cvkg-accessibility", version = "0.4.4" }
+cvkg-cli = { path = "../cvkg-cli", version = "0.4.4" }
+cvkg-compositor = { path = "../cvkg-compositor", version = "0.4.4" }
+cvkg-export-raster = { path = "../cvkg-export-raster", version = "0.4.4" }
+cvkg-game-hud = { path = "../cvkg-game-hud", version = "0.4.4" }
+cvkg-icons = { path = "../cvkg-icons", version = "0.4.4" }
+cvkg-materials = { path = "../cvkg-materials", version = "0.4.4" }
+cvkg-physics = { path = "../cvkg-physics", version = "0.4.4" }
+cvkg-reflect = { path = "../cvkg-reflect", version = "0.4.4" }
+cvkg-render-native = { path = "../cvkg-render-native", version = "0.4.4" }
+cvkg-render-software = { path = "../cvkg-render-software", version = "0.4.4" }
+cvkg-scheduler = { path = "../cvkg-scheduler", version = "0.4.4" }
+cvkg-svg-filters = { path = "../cvkg-svg-filters", version = "0.4.4" }
+cvkg-telemetry = { path = "../cvkg-telemetry", version = "0.4.4" }
 walkdir = "2.3"
-cvkg-macros = { path = "../cvkg-macros", version = "0.4.3" }
-cvkg-components = { path = "../cvkg-components", version = "0.4.3" }
-cvkg-layout = { path = "../cvkg-layout", version = "0.4.3" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.4.3" }
-cvkg-scene = { path = "../cvkg-scene", version = "0.4.3" }
-cvkg-anim = { path = "../cvkg-anim", version = "0.4.3" }
-cvkg-flow = { path = "../cvkg-flow", version = "0.4.3" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.4.4" }
+cvkg-components = { path = "../cvkg-components", version = "0.4.4" }
+cvkg-layout = { path = "../cvkg-layout", version = "0.4.4" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.4.4" }
+cvkg-scene = { path = "../cvkg-scene", version = "0.4.4" }
+cvkg-anim = { path = "../cvkg-anim", version = "0.4.4" }
+cvkg-flow = { path = "../cvkg-flow", version = "0.4.4" }
 serde_json = "1.0"
 insta = { version = "1.34", features = ["json"] }
 # Property-based testing
@@ -53,7 +53,7 @@ proptest = "1.4"
 arbitrary = { version = "1.3", features = ["derive"] }
 # Fuzz testing support
 libfuzzer-sys = "0.4"
-cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.4.3" }
+cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.4.4" }
 glam = { version = "0.33" }
 fs2 = "0.4"
 cvkg-platform-core = { workspace = true }

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-scene"
-version = "0.4.3"
+version = "0.4.4"
 build = false
 autolib = false
 autobins = false
@@ -42,17 +42,17 @@ name = "journey_tests"
 path = "tests/journey_tests.rs"
 
 [dependencies]
-cvkg-runic-text = { version = "0.4.3", path = "../cvkg-runic-text" }
+cvkg-runic-text = { version = "0.4.4", path = "../cvkg-runic-text" }
 
 [dependencies.bincode-next]
 version = "3.1.1"
 features = ["serde"]
 
 [dependencies.cvkg-core]
-version = "0.4.3"
+version = "0.4.4"
 
 [dependencies.cvkg-spatial]
-version = "0.4.3"
+version = "0.4.4"
 
 [dependencies.glam]
 version = "0.33"
@@ -69,8 +69,8 @@ features = ["derive"]
 version = "1.0"
 
 [dev-dependencies]
-cvkg-components = { path = "../cvkg-components", version = "0.4.3" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.4.3" }
+cvkg-components = { path = "../cvkg-components", version = "0.4.4" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.4.4" }
 
 [dev-dependencies.insta]
 version = "1.34"

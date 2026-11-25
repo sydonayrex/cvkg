@@ -54,3 +54,9 @@ immutable; move all pins to `0.4.2` together.
 `v0.4.3` is a patch correction to `v0.4.2`. It keeps all public signatures
 stable and only refreshes the web accessibility bridge. The `v0.4.2` tag is
 immutable; move all pins to `0.4.3` together.
+
+## v0.4.4
+
+`v0.4.4` is a patch correction to `v0.4.3`. It adds browser-runner and ignore
+changes without touching public Rust APIs. The `v0.4.3` tag is immutable; move
+all pins to `0.4.4` together.

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.4 - 2026-11-22
+
+Patch release. Adds real WebKit browser verification to the workspace.
+
+- Playwright WebKit 27.2 and iPhone 13 emulation pass the 21-check DOM smoke
+  locally; Chromium passes through the same runner.
+- The browser smoke runner uses a wide viewport with mobile device emulation so
+  fixed-coordinate hit regions remain testable.
+- `node_modules/` is ignored; the web demo pins Playwright in `package-lock.json`.
+
 ## v0.4.3 - 2026-11-22
 
 Patch release. Streams input state into the mirrored web accessibility tree.

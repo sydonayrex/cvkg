@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-macros"
-version = "0.4.3"
+version = "0.4.4"
 build = false
 autolib = false
 autobins = false
@@ -56,8 +56,8 @@ version = "2.0"
 features = ["full"]
 
 [dev-dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.4.3" }
-cvkg-components = { path = "../cvkg-components", version = "0.4.3" }
-cvkg-reflect = { path = "../cvkg-reflect", version = "0.4.3" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.4.3" }
+cvkg-core = { path = "../cvkg-core", version = "0.4.4" }
+cvkg-components = { path = "../cvkg-components", version = "0.4.4" }
+cvkg-reflect = { path = "../cvkg-reflect", version = "0.4.4" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.4.4" }
 serde_json = "1"

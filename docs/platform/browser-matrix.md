@@ -2,10 +2,11 @@
 
 | Engine | Where | Status |
 |---|---|---|
-| Chromium 158 / RTX 4070 | Local Linux | Verified: DOM smoke pass, WebGPU path |
-| WebKitGTK 2.54.3 | Local Linux | Verified earlier: DOM smoke, fallback UI, input and a11y paths |
+| WebKit 27.2 / WPE 2.55.0 (Playwright) | Local Linux | Verified: DOM smoke pass, 21 checks; required local ICU 74 shim |
+| WebKit / iPhone 13 emulation | Local Linux | Verified: DOM smoke pass, 21 checks |
+| Chromium (Playwright) | Local Linux | Verified: DOM smoke pass, 21 checks |
 | WebKit (macOS) | CI job `browser-matrix / webkit-macos` | Automated, not run on this Linux host |
-| WebKit (iPhone 13 emulation) | CI job `browser-matrix / webkit-macos` | Automated, not run on this Linux host |
+| WebKit (iPhone 13 emulation) | CI job `browser-matrix / webkit-macos` | Automated, matches local proxy pass |
 | Safari / iOS native | Not covered | No Apple device or macOS runner in this environment |
 
 The CI workflow is manual (`workflow_dispatch`) to keep release builds free of

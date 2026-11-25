@@ -9,7 +9,10 @@ if (!engine) {
 }
 
 const browser = await engine.launch();
-const context = await browser.newContext(deviceName ? devices[deviceName] : {});
+const device = deviceName
+  ? { ...devices[deviceName], viewport: { width: 900, height: 700 } }
+  : {};
+const context = await browser.newContext(device);
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (error) => errors.push(String(error)));
