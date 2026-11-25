@@ -147,8 +147,8 @@ enum Commands {
     },
     /// Inspect the generated component source registry
     Component {
-        /// Action: list, view, or diff
-        #[arg(value_parser = ["list", "view", "diff"])]
+        /// Action: list, view, diff, add, or update
+        #[arg(value_parser = ["list", "view", "diff", "add", "update"])]
         action: String,
         /// Component name for view or diff
         name: Option<String>,
@@ -620,6 +620,23 @@ pub fn run() {
                         Some(true) => println!("in sync"),
                         Some(false) => println!("differs from registry source"),
                         None => eprintln!("cannot compare {name} with {}", local.display()),
+                    }
+                }
+                "add" => {
+                    let name = name.expect("component name required for add");
+                    let target = local.expect("--local is required for add (target directory)");
+                    match registry.add(&name, &target) {
+                        Ok(path) => println!("added {}", path.display()),
+                        Err(error) => eprintln!("component add error: {error}"),
+                    }
+                }
+                "update" => {
+                    let name = name.expect("component name required for update");
+                    let target = local.expect("--local is required for update");
+                    match registry.update(&name, &target) {
+                        Ok(true) => println!("updated {}", target.display()),
+                        Ok(false) => println!("already current"),
+                        Err(error) => eprintln!("component update error: {error}"),
                     }
                 }
                 _ => unreachable!(),

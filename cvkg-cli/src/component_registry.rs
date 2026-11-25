@@ -47,6 +47,41 @@ impl ComponentRegistry {
         let local_text = std::fs::read_to_string(local).ok()?;
         Some(canonical == local_text)
     }
+
+    /// Copy a component source into `target_dir` and return the new path.
+    pub fn add(&self, name: &str, target_dir: &Path) -> Result<PathBuf, String> {
+        let source = self
+            .source(name)
+            .ok_or_else(|| format!("unknown component: {name}"))?;
+        let entry = self
+            .entries
+            .iter()
+            .find(|entry| entry.name == name)
+            .expect("source implies entry");
+        let file_name = Path::new(&entry.path)
+            .file_name()
+            .ok_or_else(|| format!("invalid source path for {name}"))?;
+        let target = target_dir.join(file_name);
+        if target.exists() {
+            return Err(format!("target already exists: {}", target.display()));
+        }
+        std::fs::write(&target, source)
+            .map_err(|error| format!("cannot write {}: {error}", target.display()))?;
+        Ok(target)
+    }
+
+    /// Refresh a local copy from the canonical source. Returns true if changed.
+    pub fn update(&self, name: &str, local: &Path) -> Result<bool, String> {
+        let source = self
+            .source(name)
+            .ok_or_else(|| format!("unknown component: {name}"))?;
+        if std::fs::read_to_string(local).ok().as_deref() == Some(source.as_str()) {
+            return Ok(false);
+        }
+        std::fs::write(local, source)
+            .map_err(|error| format!("cannot write {}: {error}", local.display()))?;
+        Ok(true)
+    }
 }
 
 fn workspace_root() -> PathBuf {
