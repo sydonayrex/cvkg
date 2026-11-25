@@ -273,7 +273,10 @@ mod light_uniforms_tests {
         // GpuLight has: [f32; 4] (16) + [f32; 3] (16 aligned) + f32 (4) + [f32; 4] (16) + [f32; 2] (8) + [f32; 2] (8)
         // Total with std140 alignment rules
         let size = std::mem::size_of::<GpuLight>();
-        assert_eq!(size, 64, "GpuLight should be 64 bytes for proper GPU alignment");
+        assert_eq!(
+            size, 64,
+            "GpuLight should be 64 bytes for proper GPU alignment"
+        );
         Ok(())
     }
 
@@ -291,7 +294,10 @@ mod light_uniforms_tests {
         let expected = MAX_LIGHTS * 64 + 16; // Conservative estimate with padding
         let size = std::mem::size_of::<LightData>();
         // Verify size is reasonable (at least the lights array)
-        assert!(size >= MAX_LIGHTS * 64, "LightData buffer too small for 32 lights");
+        assert!(
+            size >= MAX_LIGHTS * 64,
+            "LightData buffer too small for 32 lights"
+        );
         Ok(())
     }
 }
@@ -379,7 +385,7 @@ impl Default for CsmUniforms {
 
 /// Uniform buffer for precomputed GI data (L2 Spherical Harmonics probes).
 /// Contains irradiance volume configuration and SH coefficients for indirect lighting.
-/// 
+///
 /// # GPU Layout
 /// - Header: 48 bytes (volume_origin: vec3 + padding, volume_spacing: vec3 + padding, probe_dimensions: uvec3 + padding)
 /// - Probe coefficients: 4096 probes × 12 floats × 4 bytes = 196,608 bytes
@@ -390,15 +396,15 @@ pub struct GiUniforms {
     /// World-space origin of the irradiance volume grid.
     pub volume_origin: [f32; 3],
     pub _pad0: f32, // 16-byte alignment padding
-    
+
     /// Spacing between probes in world units.
     pub volume_spacing: [f32; 3],
     pub _pad1: f32, // 16-byte alignment padding
-    
+
     /// Number of probes in each dimension (x, y, z).
     pub probe_dimensions: [u32; 3],
     pub _pad2: u32, // 16-byte alignment padding
-    
+
     /// L2 SH coefficients (9 per probe, stored in 12-float slots for alignment).
     /// Each probe stores: L0 RGB, L1 RGB×3, L2 RGB×5 scaled/aligned to vec3 boundaries.
     pub probe_coefficients: [[f32; 12]; 4096], // 16×16×16 grid default
@@ -420,12 +426,12 @@ impl Default for GiUniforms {
 
 /// L2 Spherical Harmonics evaluation.
 /// Evaluates the SH coefficients at a given world position using trilinear interpolation.
-/// 
+///
 /// # Arguments
 /// * `world_pos` - World-space position to sample
 /// * `_normal` - Surface normal for directional SH evaluation (unused in L0-only implementation)
 /// * `uniforms` - GI uniform buffer containing probe coefficients
-/// 
+///
 /// # Returns
 /// Indirect irradiance color (RGB)
 pub fn evaluate_sh_l2(world_pos: [f32; 3], _normal: [f32; 3], uniforms: &GiUniforms) -> [f32; 3] {
@@ -436,12 +442,12 @@ pub fn evaluate_sh_l2(world_pos: [f32; 3], _normal: [f32; 3], uniforms: &GiUnifo
     ];
 
     // Clamp to volume bounds (edge case invariant)
-    if grid_pos[0] < 0.0 
-        || grid_pos[1] < 0.0 
+    if grid_pos[0] < 0.0
+        || grid_pos[1] < 0.0
         || grid_pos[2] < 0.0
         || (grid_pos[0] as u32) >= uniforms.probe_dimensions[0]
         || (grid_pos[1] as u32) >= uniforms.probe_dimensions[1]
-        || (grid_pos[2] as u32) >= uniforms.probe_dimensions[2] 
+        || (grid_pos[2] as u32) >= uniforms.probe_dimensions[2]
     {
         return [0.0, 0.0, 0.0]; // Fallback to ambient (handled by shader)
     }
@@ -451,12 +457,12 @@ pub fn evaluate_sh_l2(world_pos: [f32; 3], _normal: [f32; 3], uniforms: &GiUnifo
         grid_pos[1].floor() as u32,
         grid_pos[2].floor() as u32,
     ];
-    
+
     // Linear index into probe array: idx = x + y*dim_x + z*dim_x*dim_y
-    let probe_idx = grid_cell[0] 
-        + grid_cell[1] * uniforms.probe_dimensions[0] 
+    let probe_idx = grid_cell[0]
+        + grid_cell[1] * uniforms.probe_dimensions[0]
         + grid_cell[2] * uniforms.probe_dimensions[0] * uniforms.probe_dimensions[1];
-    
+
     // Extract L0 coefficients (indices 0-2)
     let coeffs = uniforms.probe_coefficients[probe_idx as usize];
     [coeffs[0], coeffs[1], coeffs[2]]

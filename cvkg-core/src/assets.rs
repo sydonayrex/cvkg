@@ -1,9 +1,9 @@
 //! Centralized asset server and hot-reloading subsystem.
 //! Handles file watching, loading, and notifying runtime components when files change.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::collections::HashMap;
 
 type ListenerMap = Arc<Mutex<HashMap<PathBuf, Vec<Box<dyn AssetHotReloadListener>>>>>;
 
@@ -33,12 +33,12 @@ impl AssetServer {
     pub fn new() -> Self {
         let listeners: ListenerMap = Arc::new(Mutex::new(HashMap::new()));
         let listeners_clone = Arc::clone(&listeners);
-        
+
         let handle = std::thread::spawn(move || {
             let mut last_modified = HashMap::new();
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(500));
-                
+
                 // Safely extract paths currently watched
                 let paths_to_check: Vec<PathBuf> = {
                     if let Ok(map) = listeners_clone.lock() {
@@ -47,7 +47,7 @@ impl AssetServer {
                         continue;
                     }
                 };
-                
+
                 for path in paths_to_check {
                     if let Ok(metadata) = std::fs::metadata(&path)
                         && let Ok(modified) = metadata.modified()
@@ -108,14 +108,10 @@ impl AssetServer {
 
     /// Watches glTF asset paths for hot reload.
     /// Uses same polling mechanism as watch(), extended for .glb/.gltf extensions.
-    /// 
+    ///
     /// # Invariant
     /// Watched path triggers on_asset_changed within 500ms + debounce.
-    pub fn watch_gltf<P: AsRef<Path>>(
-        &self,
-        path: P,
-        listener: Box<dyn AssetHotReloadListener>,
-    ) {
+    pub fn watch_gltf<P: AsRef<Path>>(&self, path: P, listener: Box<dyn AssetHotReloadListener>) {
         let path_buf = path.as_ref().to_path_buf();
         let mut listeners = self.listeners.lock().unwrap();
         listeners.entry(path_buf).or_default().push(listener);
@@ -143,12 +139,14 @@ mod tests {
     fn test_asset_server_trigger() {
         let server = AssetServer::new();
         let called = Arc::new(AtomicBool::new(false));
-        let listener = TestListener { called: Arc::clone(&called) };
+        let listener = TestListener {
+            called: Arc::clone(&called),
+        };
         let path = PathBuf::from("test_asset.gltf");
-        
+
         server.watch(&path, Box::new(listener));
         server.trigger_reload(&path);
-        
+
         assert!(called.load(Ordering::SeqCst));
     }
 
@@ -160,8 +158,13 @@ mod tests {
         let called = Arc::new(AtomicBool::new(false));
 
         // Should not panic - adds to watched paths
-        server.watch_gltf(&path, Box::new(TestListener { called: called.clone() }));
-        
+        server.watch_gltf(
+            &path,
+            Box::new(TestListener {
+                called: called.clone(),
+            }),
+        );
+
         // Verify path is registered (internal check)
         let listeners = server.listeners.lock().unwrap();
         assert!(listeners.contains_key(&path));

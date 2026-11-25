@@ -30,12 +30,18 @@ impl Mesh {
             let normals = if mesh.normals.is_empty() {
                 vec![[0.0, 0.0, 1.0]; vertices.len()]
             } else {
-                mesh.normals.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
+                mesh.normals
+                    .chunks_exact(3)
+                    .map(|c| [c[0], c[1], c[2]])
+                    .collect()
             };
             let tex_coords = if mesh.texcoords.is_empty() {
                 vec![[0.0, 0.0]; vertices.len()]
             } else {
-                mesh.texcoords.chunks_exact(2).map(|c| [c[0], c[1]]).collect()
+                mesh.texcoords
+                    .chunks_exact(2)
+                    .map(|c| [c[0], c[1]])
+                    .collect()
             };
             let mut new_mesh = Mesh {
                 vertices,
