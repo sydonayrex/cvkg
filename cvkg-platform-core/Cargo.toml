@@ -1,0 +1,11 @@
+[package]
+name = "cvkg-platform-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared platform contracts for CVKG render targets"
+
+[lib]
+name = "cvkg_platform_core"
+path = "src/lib.rs"

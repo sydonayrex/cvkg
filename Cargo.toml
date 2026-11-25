@@ -40,6 +40,9 @@ members = [
     "cvkg-gallery",
     "cvkg-game-hud",
     "cvkg-export-raster",
+    "cvkg-platform-core",
+    "cvkg-platform-native",
+    "cvkg-platform-web",
 ]
 
 [workspace.package]
@@ -63,6 +66,9 @@ cvkg-gltf = { path = "cvkg-gltf", version = "0.3.5" }
 cvkg-render-3d = { path = "cvkg-render-3d", version = "0.3.5" }
 runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.3.5" }
 cvkg-runic-text = { path = "cvkg-runic-text", version = "0.3.5" }
+cvkg-platform-core = { path = "cvkg-platform-core", version = "0.3.5" }
+cvkg-platform-native = { path = "cvkg-platform-native", version = "0.3.5" }
+cvkg-platform-web = { path = "cvkg-platform-web", version = "0.3.5" }
 cvkg-physics = { path = "cvkg-physics", version = "0.3.5" }
 cvkg-themes = { path = "cvkg-themes", version = "0.3.5" }
 cvkg-macros = { path = "cvkg-macros", version = "0.3.5" }

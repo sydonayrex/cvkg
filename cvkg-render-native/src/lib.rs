@@ -62,6 +62,7 @@ pub use contracts::{
     RenderingMode, SemanticRoleMapping, SemanticRoleRegistry, StateSyncContract, StateSyncRegistry,
     SyncDirection, TranslationContract, TranslationContractRegistry, WidgetVirtualizationConfig,
 };
+pub use cvkg_platform_native::NativePlatform;
 pub use events::{convert_ime_event, convert_keyboard_event, convert_mouse_event, load_icon};
 pub use main_loop::{AppEvent, ShieldWall};
 pub use regression::VisualRegressionTracker;
