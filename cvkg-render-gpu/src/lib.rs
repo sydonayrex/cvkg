@@ -32,6 +32,8 @@
 )]
 
 pub mod error;
+#[cfg(feature = "hot-patching")]
+pub mod hot_patch;
 pub mod kvasir;
 mod material;
 // P0-3: single source of truth for composed WGSL programs (runtime + tests).
