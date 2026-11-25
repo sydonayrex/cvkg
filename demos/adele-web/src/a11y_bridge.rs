@@ -102,6 +102,8 @@ struct MirroredNode {
     role: String,
     /// Human-readable accessible name exposed via `aria-label`.
     label: String,
+    /// Canvas-space geometry: x, y, width, height.
+    rect: (f32, f32, f32, f32),
     /// The live DOM element handle.
     element: web_sys::HtmlElement,
 }
@@ -227,22 +229,28 @@ impl A11yBridge {
     /// `id` is a stable id chosen by the canvas. `parent` optionally names
     /// another mirrored node that this one should be nested under (pass `None`
     /// for a top-level node). `role` and `label` become the element's `role`
-    /// and `aria-label`. If `parent` changes, the element is moved in the DOM.
+    /// `rect` is `(x, y, width, height)` in canvas space and is mirrored to
+    /// `data-cvkg-rect` so DOM tests and AT can inspect node geometry.
+    /// If `parent` changes, the element is moved in the DOM.
     pub fn upsert_node(
         &mut self,
         id: u64,
         parent: Option<u64>,
         role: &str,
         label: &str,
+        rect: (f32, f32, f32, f32),
     ) -> Result<(), JsValue> {
         use wasm_bindgen::JsCast;
 
+        let rect_attr = format!("{},{},{},{}", rect.0, rect.1, rect.2, rect.3);
         if let Some(index) = self.nodes.iter().position(|node| node.id == id) {
             let element = self.nodes[index].element.clone();
             element.set_attribute("role", role)?;
             element.set_attribute("aria-label", label)?;
+            element.set_attribute("data-cvkg-rect", &rect_attr)?;
             self.nodes[index].role = role.to_string();
             self.nodes[index].label = label.to_string();
+            self.nodes[index].rect = rect;
             if self.nodes[index].parent != parent {
                 self.nodes[index].parent = parent;
                 let container = self.container.clone();
@@ -261,12 +269,14 @@ impl A11yBridge {
         element.set_attribute("aria-label", label)?;
         element.set_attribute("tabindex", "0")?;
         element.set_attribute("data-cvkg-node-id", &id.to_string())?;
+        element.set_attribute("data-cvkg-rect", &rect_attr)?;
         Self::append_under(&self.container, &element, parent, &self.nodes)?;
         self.nodes.push(MirroredNode {
             id,
             parent,
             role: role.to_string(),
             label: label.to_string(),
+            rect,
             element,
         });
         Ok(())
@@ -536,6 +546,7 @@ impl A11yBridge {
         _parent: Option<u64>,
         _role: &str,
         _label: &str,
+        _rect: (f32, f32, f32, f32),
     ) -> Result<(), JsValue> {
         Err(unsupported())
     }

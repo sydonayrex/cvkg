@@ -21,8 +21,17 @@ export async function runDomSmoke() {
   check('canvas present', !!canvas, null);
   check('canvas focusable and named', canvas?.tabIndex === 0 && !!canvas?.getAttribute('aria-label'), null);
 
-  const mirrored = [...document.querySelectorAll('[data-cvkg-node-id]')].map(e => e.getAttribute('role'));
+  const nodes = [...document.querySelectorAll('[data-cvkg-node-id]')];
+  const mirrored = nodes.map(e => e.getAttribute('role'));
   check('a11y bridge mirrors heading+textbox', mirrored.includes('heading') && mirrored.includes('textbox'), mirrored);
+  const regionLabels = nodes
+    .filter(e => e.getAttribute('role') === 'button')
+    .map(e => e.getAttribute('aria-label'));
+  for (const label of ['Sidebar', 'Search field', 'Detail panel']) {
+    check(`a11y bridge mirrors ${label}`, regionLabels.includes(label), regionLabels);
+  }
+  const geometry = nodes.map(e => e.getAttribute('data-cvkg-rect'));
+  check('mirrored nodes carry geometry', nodes.length > 0 && geometry.every(v => /^\d+(\.\d+)?,\d+(\.\d+)?,\d+(\.\d+)?,\d+(\.\d+)?$/.test(v)), geometry);
 
   const rect = canvas.getBoundingClientRect();
   const click = (x, y) => {
@@ -53,14 +62,14 @@ export async function runDomSmoke() {
   check('DOM text proxy present', !!proxy, null);
   proxy.value = 'hello';
   proxy.dispatchEvent(new Event('input', { bubbles: true }));
-  check('DOM text proxy updates live region', live() === 'Text changed: hello', live());
+  check('DOM text proxy updates live region with caret', live() === 'Text changed: hello (caret 5)', live());
   check('DOM text proxy updates canvas state', state().text === 'hello' && state().caret === 5, state());
 
   check('no JS errors', errors.length === 0, errors);
 
   return {
     pass: failures.length === 0,
-    checks: 15,
+    checks: 19,
     failures,
   };
 }

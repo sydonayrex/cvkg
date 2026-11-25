@@ -50,14 +50,31 @@ pub fn init_a11y_bridge_spike(canvas_id: &str) -> Result<(), JsValue> {
     bridge.attach_text_proxy(|event| {
         if let a11y_bridge::AccessEvent::TextChanged(text) = event {
             crate::web_input::apply_proxy_text(&text);
-            let _ = crate::announce_to_a11y(&format!("Text changed: {text}"));
+            let caret = crate::web_input::current_state().caret;
+            let _ = crate::announce_to_a11y(&format!("Text changed: {text} (caret {caret})"));
             crate::schedule_render();
         } else {
             log::info!("[a11y-spike] {:?}", event);
         }
     })?;
-    bridge.upsert_node(1, None, "heading", "ADELE design systems explorer")?;
-    bridge.upsert_node(2, Some(1), "textbox", "Search systems")?;
+    bridge.upsert_node(
+        1,
+        None,
+        "heading",
+        "ADELE design systems explorer",
+        (24.0, 0.0, 752.0, 24.0),
+    )?;
+    bridge.upsert_node(
+        2,
+        Some(1),
+        "textbox",
+        "Search systems",
+        crate::web_input::REGIONS[1].rect,
+    )?;
+    for region in &crate::web_input::REGIONS {
+        let id = 10 + region.id as u64;
+        bridge.upsert_node(id, Some(1), "button", region.name, region.rect)?;
+    }
     bridge.announce("Accessibility bridge spike initialized")?;
     A11Y_SPIKE.with(|slot| *slot.borrow_mut() = Some(bridge));
     Ok(())
