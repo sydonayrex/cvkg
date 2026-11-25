@@ -118,7 +118,8 @@ pub fn detect_capabilities() -> BrowserCapabilities {
 }
 
 /// The message shown to users when no supported graphics API was detected.
-pub const UNSUPPORTED_MESSAGE: &str = "This demo needs WebGPU or WebGL2; your browser/WebKit configuration is unsupported.";
+pub const UNSUPPORTED_MESSAGE: &str =
+    "This demo needs WebGPU or WebGL2; your browser/WebKit configuration is unsupported.";
 
 /// Idempotently insert a perceivable fallback notice into the DOM on wasm.
 ///
@@ -241,6 +242,9 @@ fn probe_webgl2(document: &web_sys::Document) -> bool {
 /// also match, so callers must not use it to make correctness decisions.
 #[cfg(target_arch = "wasm32")]
 fn probe_webkit_like(navigator: &web_sys::Navigator) -> bool {
-    let user_agent = navigator.user_agent().unwrap_or_default().to_ascii_lowercase();
+    let user_agent = navigator
+        .user_agent()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     user_agent.contains("webkit") || user_agent.contains("safari")
 }

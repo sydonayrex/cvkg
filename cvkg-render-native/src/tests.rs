@@ -381,8 +381,7 @@ mod tests {
         vdom.root = Some(root_id);
         vdom.nodes.insert(root_id, root);
         vdom.nodes.insert(cvkg_core::KvasirId(button_id), button);
-        vdom.parents
-            .insert(cvkg_core::KvasirId(button_id), root_id);
+        vdom.parents.insert(cvkg_core::KvasirId(button_id), root_id);
 
         // Click center of the button: (60, 40)
         let response = vdom.dispatch_event(cvkg_core::Event::PointerClick {
@@ -433,21 +432,19 @@ mod tests {
 
         // Register handlers on both button and root
         let f = Arc::clone(&fired);
-        vdom.event_handlers
-            .entry(button_id)
-            .or_default()
-            .insert(
-                "pointerclick".to_string(),
-                Arc::new(move |_evt| { f.lock().unwrap().push("button_click"); }) as _,
-            );
+        vdom.event_handlers.entry(button_id).or_default().insert(
+            "pointerclick".to_string(),
+            Arc::new(move |_evt| {
+                f.lock().unwrap().push("button_click");
+            }) as _,
+        );
         let f2 = Arc::clone(&fired);
-        vdom.event_handlers
-            .entry(root_id)
-            .or_default()
-            .insert(
-                "pointerclick".to_string(),
-                Arc::new(move |_evt| { f2.lock().unwrap().push("root_click"); }) as _,
-            );
+        vdom.event_handlers.entry(root_id).or_default().insert(
+            "pointerclick".to_string(),
+            Arc::new(move |_evt| {
+                f2.lock().unwrap().push("root_click");
+            }) as _,
+        );
 
         vdom.root = Some(root_id);
         vdom.nodes.insert(root_id, root);
@@ -457,7 +454,11 @@ mod tests {
         // Step 1: hit_test resolves the target (simulates what main_loop does)
         let hit = vdom.hit_test(60.0, 40.0, 0.0);
         let target_id = hit.map(|(id, _)| id);
-        assert_eq!(target_id, Some(button_id), "hit_test must resolve to the button");
+        assert_eq!(
+            target_id,
+            Some(button_id),
+            "hit_test must resolve to the button"
+        );
 
         // Step 2: dispatch to target (simulates MouseInput::Released path)
         let response = vdom.dispatch_event(cvkg_core::Event::PointerClick {
@@ -475,16 +476,27 @@ mod tests {
         let fired_events = fired.lock().unwrap();
         assert!(
             fired_events.contains(&"button_click"),
-            "button handler must fire first: got {:?}", *fired_events
+            "button handler must fire first: got {:?}",
+            *fired_events
         );
         assert!(
             fired_events.contains(&"root_click"),
-            "root handler must fire via bubbling: got {:?}", *fired_events
+            "root handler must fire via bubbling: got {:?}",
+            *fired_events
         );
         // Button fires before root (child-first, then bubble)
-        let btn_pos = fired_events.iter().position(|&s| s == "button_click").unwrap();
-        let root_pos = fired_events.iter().position(|&s| s == "root_click").unwrap();
-        assert!(btn_pos < root_pos, "button must fire before root (bubbling order)");
+        let btn_pos = fired_events
+            .iter()
+            .position(|&s| s == "button_click")
+            .unwrap();
+        let root_pos = fired_events
+            .iter()
+            .position(|&s| s == "root_click")
+            .unwrap();
+        assert!(
+            btn_pos < root_pos,
+            "button must fire before root (bubbling order)"
+        );
     }
 }
 
