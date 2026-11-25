@@ -3,18 +3,18 @@
 use crate::state::{GalleryState, Registry};
 use cvkg_components::chrome::{NiflheimSidebar, SidebarItem, SidebarVibrancy};
 use cvkg_core::{Rect, Renderer, Size, SizeProposal, View};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Sidebar panel showing component categories.
 #[derive(Clone)]
 pub struct GallerySidebar {
-    state: Arc<Mutex<GalleryState>>,
+    state: crate::state::GalleryStateHandle,
     on_select: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
 impl GallerySidebar {
     pub fn new(
-        state: Arc<Mutex<GalleryState>>,
+        state: crate::state::GalleryStateHandle,
         on_select: impl Fn(&str) + Send + Sync + 'static,
     ) -> Self {
         Self {
@@ -24,7 +24,7 @@ impl GallerySidebar {
     }
 
     fn build_sidebar_items(&self) -> Vec<SidebarItem> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         let by_category = Registry::by_category();
         let selected = state.selected_component.clone();
 

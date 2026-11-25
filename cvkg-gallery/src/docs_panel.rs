@@ -5,21 +5,21 @@ use cvkg_components::{
     Badge, BadgeVariant, Button, Codeblock, CopyButton, Divider, HStack, ScrollView, Text, VStack,
 };
 use cvkg_core::{Rect, Renderer, Size, SizeProposal, View};
-use std::sync::{Arc, Mutex};
+
 
 /// API Documentation panel — shows props table, usage examples, and copy buttons.
 #[derive(Clone)]
 pub struct DocsPanel {
-    state: Arc<Mutex<GalleryState>>,
+    state: crate::state::GalleryStateHandle,
 }
 
 impl DocsPanel {
-    pub fn new(state: Arc<Mutex<GalleryState>>) -> Self {
+    pub fn new(state: crate::state::GalleryStateHandle) -> Self {
         Self { state }
     }
 
     fn get_selected_meta(&self) -> Option<ComponentMeta> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         state
             .selected_component
             .as_ref()

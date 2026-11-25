@@ -5,21 +5,21 @@ use cvkg_components::{
     Button, CodeEditor, Divider, HStack, Input, Select, Slider, Text, Toggle, VStack,
 };
 use cvkg_core::{AnyView, Rect, Renderer, Size, SizeProposal, View};
-use std::sync::{Arc, Mutex};
+
 
 /// Props panel showing editable properties for the selected component.
 #[derive(Clone)]
 pub struct PropsPanel {
-    state: Arc<Mutex<GalleryState>>,
+    state: crate::state::GalleryStateHandle,
 }
 
 impl PropsPanel {
-    pub fn new(state: Arc<Mutex<GalleryState>>) -> Self {
+    pub fn new(state: crate::state::GalleryStateHandle) -> Self {
         Self { state }
     }
 
     fn get_selected_meta(&self) -> Option<ComponentMeta> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         state
             .selected_component
             .as_ref()
@@ -27,7 +27,7 @@ impl PropsPanel {
     }
 
     fn get_prop_value(&self, prop_name: &str) -> Option<String> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         state.selected_component.as_ref().and_then(|name| {
             Registry::find(name).and_then(|meta| {
                 // For now, return placeholder - in Phase 5 this would be auto-generated
@@ -37,7 +37,7 @@ impl PropsPanel {
     }
 
     fn set_prop_value(&self, prop_name: &str, value: String) {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         if let Some(name) = state.selected_component.as_ref() {
             self.set_manual_prop(name, prop_name, value);
         }
@@ -64,7 +64,7 @@ impl PropsPanel {
     fn set_manual_prop(&self, name: &str, prop: &str, value: String) {
         // In Phase 5, this will update actual component properties via reflection
         // For now, just log the change
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         state.log_event(&format!("Property '{}.{}' = {}", name, prop, value));
     }
 }

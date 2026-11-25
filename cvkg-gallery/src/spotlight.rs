@@ -5,21 +5,21 @@ use crate::state::{
 };
 use cvkg_components::MimirSpotlight;
 use cvkg_core::{Rect, Renderer, Size, SizeProposal, View};
-use std::sync::{Arc, Mutex};
+
 
 /// Spotlight panel that searches components and commands.
 #[derive(Clone)]
 pub struct GallerySpotlight {
-    state: Arc<Mutex<GalleryState>>,
+    state: crate::state::GalleryStateHandle,
 }
 
 impl GallerySpotlight {
-    pub fn new(state: Arc<Mutex<GalleryState>>) -> Self {
+    pub fn new(state: crate::state::GalleryStateHandle) -> Self {
         Self { state }
     }
 
     fn build_scored_components(&self) -> Vec<(ComponentMeta, u32)> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         let query = &state.search_text;
         let all_components = Registry::all();
 
@@ -62,7 +62,7 @@ impl GallerySpotlight {
                     _ => return None,
                 };
                 Some(Box::new(move || {
-                    let mut s = state.lock().unwrap();
+                    let mut s = state.lock();
                     s.theme = theme;
                 }))
             }
@@ -78,7 +78,7 @@ impl GallerySpotlight {
                         _ => return None,
                     };
                     Some(Box::new(move || {
-                        let mut s = state.lock().unwrap();
+                        let mut s = state.lock();
                         s.scale = scale;
                     }))
                 } else {
@@ -94,7 +94,7 @@ impl GallerySpotlight {
                     _ => return None,
                 };
                 Some(Box::new(move || {
-                    let mut s = state.lock().unwrap();
+                    let mut s = state.lock();
                     s.canvas_bg = bg;
                 }))
             }
@@ -106,14 +106,14 @@ impl GallerySpotlight {
                     _ => return None,
                 };
                 Some(Box::new(move || {
-                    let mut s = state.lock().unwrap();
+                    let mut s = state.lock();
                     s.viewport = preset;
                 }))
             }
             "sidebar" if parts.len() >= 2 => {
                 if let Ok(w) = parts[1].parse::<f32>() {
                     Some(Box::new(move || {
-                        let mut s = state.lock().unwrap();
+                        let mut s = state.lock();
                         s.sidebar_width = w.clamp(200.0, 400.0);
                     }))
                 } else {
@@ -134,7 +134,7 @@ impl View for GallerySpotlight {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Build MimirSpotlight with filtered commands
         let search_text = {
-            let state = self.state.lock().unwrap();
+            let state = self.state.lock();
             state.search_text.clone()
         };
         let mut spotlight = MimirSpotlight::new().search(&search_text);
@@ -149,7 +149,7 @@ impl View for GallerySpotlight {
                 Some("Execute this action"),
                 move || {
                     action_fn();
-                    let mut s = state.lock().unwrap();
+                    let mut s = state.lock();
                     s.spotlight_open = false;
                     s.search_text.clear();
                     s.spotlight_selected = 0;
@@ -165,7 +165,7 @@ impl View for GallerySpotlight {
                 &format!("{} — {}", meta.name, meta.category),
                 Some(meta.description),
                 move || {
-                    let mut s = state.lock().unwrap();
+                    let mut s = state.lock();
                     s.select_component(&name);
                     s.spotlight_open = false;
                     s.search_text.clear();
