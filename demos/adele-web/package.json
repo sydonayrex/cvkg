@@ -1,0 +1,11 @@
+{
+  "name": "adele-web-smoke",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "smoke": "node scripts/browser_smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.55.0"
+  }
+}

@@ -162,5 +162,6 @@ option; the selected option's label carries `, selected`. This closes the
 system checklist: default, hover, focus, active, disabled, loading, invalid,
 dark, light, and small viewport. `cvkg-gallery/tests/all_components.rs` renders
 every variant through `MockRenderer`, so adding a state no longer requires a
-hand-written showcase. Hover and focus are represented by distinct visual
-variants; pointer-driven state simulation remains a separate task.
+hand-written showcase. Hover, focus, and active use forced interaction state on
+`Button`, so the matrix exercises the same render branches as pointer and
+keyboard input. Pointer-driven state simulation remains a separate task.

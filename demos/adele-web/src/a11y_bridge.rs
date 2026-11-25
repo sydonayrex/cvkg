@@ -282,6 +282,36 @@ impl A11yBridge {
         Ok(())
     }
 
+    /// Mirror every visible VDOM node into the DOM with its world geometry.
+    pub fn mirror_vdom(&mut self, vdom: &cvkg_vdom::VDom) -> Result<(), JsValue> {
+        for (id, node) in &vdom.nodes {
+            if node.aria_props.hidden {
+                continue;
+            }
+            let rect = vdom.world_rect(*id).unwrap_or(node.layout);
+            let dom_id = 1000 + id.0;
+            let parent = vdom.parents.get(id).map(|parent| 1000 + parent.0);
+            let role = if node.aria_role.is_empty() {
+                "generic"
+            } else {
+                node.aria_role.as_str()
+            };
+            let label = node
+                .aria_props
+                .label
+                .clone()
+                .unwrap_or_else(|| node.component_type.clone());
+            self.upsert_node(
+                dom_id,
+                parent,
+                role,
+                &label,
+                (rect.x, rect.y, rect.width, rect.height),
+            )?;
+        }
+        Ok(())
+    }
+
     /// Remove a previously mirrored node and its DOM element.
     ///
     /// Returns an error if `id` is unknown. Descendants are **not** reparented
@@ -548,6 +578,11 @@ impl A11yBridge {
         _label: &str,
         _rect: (f32, f32, f32, f32),
     ) -> Result<(), JsValue> {
+        Err(unsupported())
+    }
+
+    /// No-op on non-wasm targets; returns an `Unsupported` error.
+    pub fn mirror_vdom(&mut self, _vdom: &cvkg_vdom::VDom) -> Result<(), JsValue> {
         Err(unsupported())
     }
 

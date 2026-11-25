@@ -63,13 +63,13 @@ fn default_button() -> AnyView {
     AnyView::new(Button::new("Default", || {}))
 }
 fn hover_button() -> AnyView {
-    AnyView::new(Button::new("Hover", || {}).variant(ButtonVariant::Secondary))
+    AnyView::new(Button::new("Hover", || {}).hovered(true))
 }
 fn focus_button() -> AnyView {
-    AnyView::new(Button::new("Focus", || {}).variant(ButtonVariant::Ghost))
+    AnyView::new(Button::new("Focus", || {}).focused(true))
 }
 fn active_button() -> AnyView {
-    AnyView::new(Button::new("Active", || {}).variant(ButtonVariant::Link))
+    AnyView::new(Button::new("Active", || {}).pressed(true))
 }
 fn disabled_button() -> AnyView {
     AnyView::new(Button::new("Disabled", || {}).disabled(true))

@@ -7,9 +7,10 @@
 
 use cvkg_components::{
     Badge, BadgeVariant, Button, FeatureGrid, FeatureItem, Hero, PricingCard, PricingTable,
-    TestimonialCard, TestimonialItem,
+    TestimonialCard, TestimonialItem, Text, VStack,
 };
-use cvkg_core::{Never, Rect, Renderer, View};
+use cvkg_core::{KvasirId, Never, Rect, Renderer, View};
+use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode};
 use wasm_bindgen::prelude::*;
 
 /// P1-3 spike: offscreen DOM accessibility / text bridge for the canvas demo.
@@ -34,6 +35,74 @@ const DATA_JSON: &str = include_str!("data.json");
 std::thread_local! {
     static A11Y_SPIKE: std::cell::RefCell<Option<a11y_bridge::A11yBridge>> =
         const { std::cell::RefCell::new(None) };
+}
+
+/// A small VDOM tree used to exercise geometry-aware a11y mirroring.
+fn a11y_demo_vdom() -> VDom {
+    fn node(
+        id: u64,
+        component: &str,
+        role: &str,
+        label: Option<&str>,
+        children: Vec<KvasirId>,
+    ) -> VNode {
+        let mut aria = AriaProps::default();
+        aria.label = label.map(str::to_string);
+        VNode {
+            id: KvasirId(id),
+            key: None,
+            component_type: component.to_string(),
+            props: std::collections::HashMap::new(),
+            state: None,
+            layout: LayoutRect {
+                x: if id == 1 { 24.0 } else { 8.0 },
+                y: if id == 1 {
+                    24.0
+                } else if id == 2 {
+                    0.0
+                } else {
+                    40.0
+                },
+                width: 752.0,
+                height: if id == 1 { 552.0 } else { 32.0 },
+            },
+            children,
+            aria_role: role.to_string(),
+            aria_props: aria,
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: std::collections::HashMap::new(),
+        }
+    }
+
+    let mut vdom = VDom::new();
+    vdom.apply_patches(vec![
+        VDomPatch::Create(node(
+            1,
+            "VStack",
+            "group",
+            None,
+            vec![KvasirId(2), KvasirId(3)],
+        )),
+        VDomPatch::Create(node(
+            2,
+            "Text",
+            "heading",
+            Some("ADELE design systems explorer"),
+            vec![],
+        )),
+        VDomPatch::Create(node(
+            3,
+            "Text",
+            "paragraph",
+            Some("Design systems explorer"),
+            vec![],
+        )),
+    ]);
+    vdom
 }
 
 /// P1-3 spike: create the DOM accessibility/text bridge for the canvas with
@@ -74,6 +143,12 @@ pub fn init_a11y_bridge_spike(canvas_id: &str) -> Result<(), JsValue> {
     for region in &crate::web_input::REGIONS {
         let id = 10 + region.id as u64;
         bridge.upsert_node(id, Some(1), "button", region.name, region.rect)?;
+    }
+    let vdom = a11y_demo_vdom();
+    if let Err(error) = bridge.mirror_vdom(&vdom) {
+        web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!(
+            "[a11y] mirror_vdom failed: {error:?}"
+        )));
     }
     bridge.announce("Accessibility bridge spike initialized")?;
     A11Y_SPIKE.with(|slot| *slot.borrow_mut() = Some(bridge));

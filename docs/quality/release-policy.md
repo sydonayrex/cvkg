@@ -42,3 +42,9 @@ release notes live in `CHANGELOG.md`; the fresh review lives in
 migration from Task 18 and keeps all public signatures stable. The tag
 `v0.4.0` is immutable; consumers on `0.4.0` should move all pins to `0.4.1`
 together.
+
+## v0.4.2
+
+`v0.4.2` is a patch correction to `v0.4.1`. It addresses the residual
+cross-review caveats without changing public signatures. The `v0.4.1` tag is
+immutable; move all pins to `0.4.2` together.

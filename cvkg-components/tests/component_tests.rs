@@ -540,6 +540,17 @@ fn test_qrcode_rendering() {
 }
 
 #[test]
+fn button_exposes_forced_interaction_states() {
+    let button = cvkg_components::Button::new("State", || {})
+        .hovered(true)
+        .focused(true)
+        .pressed(true);
+    assert!(button.forced_hover());
+    assert!(button.forced_focus());
+    assert!(button.forced_pressed());
+}
+
+#[test]
 fn docking_workspace_builds_from_persisted_layout() {
     use cvkg_components::docking_workspace::DockingPanelHost;
     use cvkg_core::AnyView;

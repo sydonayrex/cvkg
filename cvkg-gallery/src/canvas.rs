@@ -7,16 +7,16 @@ use cvkg_components::interactive::hrungnirsegmented::{
 };
 use cvkg_components::{Button, Divider, HStack, Progress, Select, Text, Toggle, VStack};
 use cvkg_core::{AnyView, Rect, Renderer, Size, SizeProposal, View};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// Canvas for rendering the selected component.
 #[derive(Clone)]
 pub struct GalleryCanvas {
-    state: Arc<Mutex<GalleryState>>,
+    state: crate::state::GalleryStateHandle,
 }
 
 impl GalleryCanvas {
-    pub fn new(state: Arc<Mutex<GalleryState>>) -> Self {
+    pub fn new(state: crate::state::GalleryStateHandle) -> Self {
         Self { state }
     }
 
@@ -163,7 +163,7 @@ impl cvkg_core::layout::LayoutView for GalleryCanvas {
 /// Toolbar at the top of the canvas.
 #[derive(Clone)]
 pub struct CanvasToolbar {
-    state: Arc<Mutex<GalleryState>>,
+    state: crate::state::GalleryStateHandle,
     on_theme_change: Arc<dyn Fn(crate::state::GalleryTheme) + Send + Sync>,
     on_scale_change: Arc<dyn Fn(crate::state::ViewportScale) + Send + Sync>,
     on_bg_change: Arc<dyn Fn(crate::state::CanvasBackground) + Send + Sync>,
@@ -172,7 +172,7 @@ pub struct CanvasToolbar {
 
 impl CanvasToolbar {
     pub fn new(
-        state: Arc<Mutex<GalleryState>>,
+        state: crate::state::GalleryStateHandle,
         on_theme_change: impl Fn(crate::state::GalleryTheme) + Send + Sync + 'static,
         on_scale_change: impl Fn(crate::state::ViewportScale) + Send + Sync + 'static,
         on_bg_change: impl Fn(crate::state::CanvasBackground) + Send + Sync + 'static,
@@ -195,7 +195,7 @@ impl View for CanvasToolbar {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock();
         let theme = state.theme;
         let scale = state.scale;
         let bg = state.canvas_bg;
@@ -245,7 +245,7 @@ impl View for CanvasToolbar {
         let theme_segmented = cvkg_components::SegmentedControl::new(theme_options, theme_idx)
             .style(cvkg_components::interactive::hrungnirsegmented::SegmentedStyle::Capsule)
             .on_select(move |idx| {
-                let mut state = state_clone.lock().unwrap();
+                let mut state = state_clone.lock();
                 state.theme = match idx {
                     0 => crate::state::GalleryTheme::Light,
                     1 => crate::state::GalleryTheme::Dark,
@@ -275,7 +275,7 @@ impl View for CanvasToolbar {
             .style(cvkg_components::interactive::hrungnirsegmented::SegmentedStyle::Capsule)
             .on_select(move |idx| {
                 if let Some(new_scale) = crate::state::ViewportScale::ALL.get(idx) {
-                    let mut state = state_clone.lock().unwrap();
+                    let mut state = state_clone.lock();
                     state.scale = *new_scale;
                 }
             });
@@ -301,7 +301,7 @@ impl View for CanvasToolbar {
         let bg_segmented = cvkg_components::SegmentedControl::new(bg_options, bg_idx)
             .style(cvkg_components::interactive::hrungnirsegmented::SegmentedStyle::Capsule)
             .on_select(move |idx| {
-                let mut state = state_clone.lock().unwrap();
+                let mut state = state_clone.lock();
                 state.canvas_bg = match idx {
                     0 => crate::state::CanvasBackground::Light,
                     1 => crate::state::CanvasBackground::Dark,
@@ -334,7 +334,7 @@ impl View for CanvasToolbar {
                 .style(cvkg_components::interactive::hrungnirsegmented::SegmentedStyle::Capsule)
                 .on_select(move |idx| {
                     if let Some(new_viewport) = crate::state::ViewportPreset::ALL.get(idx) {
-                        let mut state = state_clone.lock().unwrap();
+                        let mut state = state_clone.lock();
                         state.viewport = *new_viewport;
                     }
                 });

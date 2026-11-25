@@ -2,12 +2,11 @@
 
 use super::{canvas, docs_panel, props_panel, sidebar, spotlight, state};
 use cvkg_core::{KeyModifiers, KeyShortcut, Rect, Renderer, Size, ThemeContext, View};
-use std::sync::{Arc, Mutex};
 
 /// Main gallery application.
 #[derive(Clone)]
 pub struct GalleryApp {
-    state: Arc<Mutex<state::GalleryState>>,
+    state: crate::state::GalleryStateHandle,
     sidebar: sidebar::GallerySidebar,
     canvas: canvas::GalleryCanvas,
     toolbar: canvas::CanvasToolbar,
@@ -24,7 +23,7 @@ impl GalleryApp {
         let on_select = {
             let state = state.clone();
             move |name: &str| {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock();
                 s.select_component(name);
             }
         };
@@ -35,7 +34,7 @@ impl GalleryApp {
         let on_theme_change = {
             let state = state.clone();
             move |theme| {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock();
                 s.theme = theme;
             }
         };
@@ -43,7 +42,7 @@ impl GalleryApp {
         let on_scale_change = {
             let state = state.clone();
             move |scale| {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock();
                 s.scale = scale;
             }
         };
@@ -51,7 +50,7 @@ impl GalleryApp {
         let on_bg_change = {
             let state = state.clone();
             move |bg| {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock();
                 s.canvas_bg = bg;
             }
         };
@@ -59,7 +58,7 @@ impl GalleryApp {
         let on_viewport_change = {
             let state = state.clone();
             move |viewport| {
-                let mut s = state.lock().unwrap();
+                let mut s = state.lock();
                 s.viewport = viewport;
             }
         };
@@ -100,7 +99,7 @@ impl View for GalleryApp {
 
     fn on_key_event(&self, key: &str, modifiers: KeyModifiers) -> bool {
         if modifiers.ctrl && key.eq_ignore_ascii_case("i") {
-            let mut state = self.state.lock().unwrap();
+            let mut state = self.state.lock();
             state.inspector_visible = !state.inspector_visible;
             true
         } else {
@@ -118,7 +117,7 @@ impl View for GalleryApp {
         // One mutex read per frame publishes an entity-backed snapshot. Child
         // views read that handle instead of taking the global lock again.
         let frame_state = {
-            let state = self.state.lock().unwrap();
+            let state = self.state.lock();
             state.clone()
         };
         state::GalleryState::set_frame_snapshot(&frame_state);
@@ -226,7 +225,7 @@ impl View for GalleryApp {
 
         // Render spotlight overlay if open
         let spotlight_open = {
-            let state = self.state.lock().unwrap();
+            let state = self.state.lock();
             state.spotlight_open
         };
 

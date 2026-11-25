@@ -8,6 +8,19 @@ use cvkg_gallery::DocsPanel;
 use cvkg_gallery::state::{GalleryState, Registry};
 
 #[test]
+fn gallery_writes_go_through_the_entity_handle() {
+    let handle = GalleryState::global();
+    {
+        let mut state = handle.lock();
+        state.selected_component = Some("VirtualList".into());
+    }
+    assert_eq!(
+        handle.read().selected_component.as_deref(),
+        Some("VirtualList")
+    );
+}
+
+#[test]
 fn canvas_renders_from_the_entity_frame_snapshot() {
     use cvkg_core::Rect;
     use cvkg_core::View;
@@ -105,17 +118,17 @@ fn inspector_toggles_from_the_gallery_key_dispatcher() {
 
     let app = GalleryApp::new();
     let state = GalleryState::global();
-    let before = state.lock().unwrap().inspector_visible;
+    let before = state.lock().inspector_visible;
     let modifiers = KeyModifiers {
         ctrl: true,
         ..KeyModifiers::default()
     };
 
     assert!(app.on_key_event("i", modifiers));
-    assert_ne!(state.lock().unwrap().inspector_visible, before);
+    assert_ne!(state.lock().inspector_visible, before);
 
     app.on_key_event("i", modifiers);
-    assert_eq!(state.lock().unwrap().inspector_visible, before);
+    assert_eq!(state.lock().inspector_visible, before);
 }
 
 #[test]

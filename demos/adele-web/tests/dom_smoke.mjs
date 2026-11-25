@@ -7,6 +7,7 @@ export async function runDomSmoke() {
   const errors = [];
   window.addEventListener('error', e => errors.push(String(e.message)));
   window.addEventListener('unhandledrejection', e => errors.push(String(e.reason)));
+  console.error = (...args) => { errors.push(args.map(String).join(' ')); };
 
   const check = (name, condition, detail) => {
     if (!condition) failures.push({ name, detail });
@@ -32,6 +33,8 @@ export async function runDomSmoke() {
   }
   const geometry = nodes.map(e => e.getAttribute('data-cvkg-rect'));
   check('mirrored nodes carry geometry', nodes.length > 0 && geometry.every(v => /^\d+(\.\d+)?,\d+(\.\d+)?,\d+(\.\d+)?,\d+(\.\d+)?$/.test(v)), geometry);
+  const vdomIds = nodes.map(e => Number(e.getAttribute('data-cvkg-node-id'))).filter(Number.isFinite);
+  check('full VDOM nodes are mirrored', vdomIds.some(id => id >= 1000), vdomIds);
 
   const rect = canvas.getBoundingClientRect();
   const click = (x, y) => {
@@ -69,7 +72,7 @@ export async function runDomSmoke() {
 
   return {
     pass: failures.length === 0,
-    checks: 19,
+    checks: 20,
     failures,
   };
 }

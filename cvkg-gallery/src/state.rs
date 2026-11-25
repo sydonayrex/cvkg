@@ -7,7 +7,8 @@ use cvkg_components::{
 use cvkg_core::{AnyView, Color, Entity, EntityArena, Layout, Rect, Size, View};
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use urlencoding;
 
 /// Component metadata for the registry and sidebar.
@@ -154,6 +155,71 @@ pub struct GalleryState {
     pub dragging_sidebar: bool,
 }
 
+/// A shared handle to one entity in a gallery-owned arena.
+#[derive(Clone)]
+pub struct GalleryStateHandle {
+    inner: Arc<RwLock<(EntityArena<GalleryState>, Entity<GalleryState>)>>,
+}
+
+/// Copy-on-write guard returned by [`GalleryStateHandle::lock`].
+pub struct GalleryStateGuard {
+    handle: GalleryStateHandle,
+    state: GalleryState,
+}
+
+impl Deref for GalleryStateGuard {
+    type Target = GalleryState;
+
+    fn deref(&self) -> &Self::Target {
+        &self.state
+    }
+}
+
+impl DerefMut for GalleryStateGuard {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.state
+    }
+}
+
+impl Drop for GalleryStateGuard {
+    fn drop(&mut self) {
+        let state = std::mem::take(&mut self.state);
+        self.handle.update(|slot| *slot = state);
+    }
+}
+
+impl GalleryStateHandle {
+    /// Create a handle owning one initial state.
+    pub fn new(state: GalleryState) -> Self {
+        let mut arena = EntityArena::new();
+        let entity = arena.insert(state);
+        Self {
+            inner: Arc::new(RwLock::new((arena, entity))),
+        }
+    }
+
+    /// Read a snapshot without holding a guard.
+    pub fn read(&self) -> GalleryState {
+        let inner = self.inner.read().expect("gallery state lock poisoned");
+        inner.0.get(inner.1).unwrap_or_default()
+    }
+
+    /// Mutate the entity in place.
+    pub fn update(&self, f: impl FnOnce(&mut GalleryState)) {
+        let mut inner = self.inner.write().expect("gallery state lock poisoned");
+        let entity = inner.1;
+        inner.0.update(entity, f);
+    }
+
+    /// Return a copy-on-write guard compatible with existing call sites.
+    pub fn lock(&self) -> GalleryStateGuard {
+        GalleryStateGuard {
+            handle: self.clone(),
+            state: self.read(),
+        }
+    }
+}
+
 thread_local! {
     /// Entity-backed snapshot of gallery state for one render thread.
     static FRAME_STATE: RefCell<(EntityArena<GalleryState>, Entity<GalleryState>)> = {
@@ -164,11 +230,11 @@ thread_local! {
 }
 
 impl GalleryState {
-    /// Get or create the global state instance.
-    pub fn global() -> Arc<Mutex<GalleryState>> {
-        static INSTANCE: OnceLock<Arc<Mutex<GalleryState>>> = OnceLock::new();
+    /// Get or create the global entity-backed state handle.
+    pub fn global() -> GalleryStateHandle {
+        static INSTANCE: OnceLock<GalleryStateHandle> = OnceLock::new();
         INSTANCE
-            .get_or_init(|| Arc::new(Mutex::new(GalleryState::default())))
+            .get_or_init(|| GalleryStateHandle::new(GalleryState::default()))
             .clone()
     }
 

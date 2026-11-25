@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.4.2 - 2026-11-22
+
+Patch release. Addresses the residual caveats from the cross-review rerun.
+
+- Gallery writes go through `GalleryStateHandle`, an entity-backed handle with
+  copy-on-write guards. The direct global `Mutex<GalleryState>` is gone.
+- Web accessibility mirrors a VDOM-derived tree with world geometry in addition
+  to the fixed hit regions and caret announcements.
+- Button exposes `hovered`, `focused`, and `pressed` builders; the gallery
+  variant matrix uses those real render branches.
+- Added a manual `browser-matrix` CI workflow and browser smoke runner for
+  Chromium, WebKit macOS, and iPhone 13 emulation.
+
 ## v0.4.1 - 2026-11-22
 
 Patch release. Corrects the v0.4.0 release with the completed Task 18 Step 3.

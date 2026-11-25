@@ -24,6 +24,10 @@ pub struct Button {
     pub(crate) size: ButtonSize,
     pub(crate) disabled: bool,
     pub(crate) loading: bool,
+    /// Forced interaction states used by previews and visual tests.
+    pub(crate) forced_hover: bool,
+    pub(crate) forced_focus: bool,
+    pub(crate) forced_pressed: bool,
     /// VDOM companion bundle — focus management + ARIA semantics.
     pub companions: CompanionBundle,
     /// Optional 3D world-space placement. When enabled, the button renders
@@ -50,6 +54,9 @@ impl Button {
             size: ButtonSize::Default,
             disabled: false,
             loading: false,
+            forced_hover: false,
+            forced_focus: false,
+            forced_pressed: false,
             companions: CompanionBundle::focusable()
                 .with_role("button")
                 .with_label(label_str),
@@ -80,6 +87,36 @@ impl Button {
     pub fn loading(mut self, loading: bool) -> Self {
         self.loading = loading;
         self
+    }
+
+    /// Force the hover state for previews and visual tests.
+    pub fn hovered(mut self, hovered: bool) -> Self {
+        self.forced_hover = hovered;
+        self
+    }
+
+    /// Force the focus state for previews and visual tests.
+    pub fn focused(mut self, focused: bool) -> Self {
+        self.forced_focus = focused;
+        self
+    }
+
+    /// Force the pressed state for previews and visual tests.
+    pub fn pressed(mut self, pressed: bool) -> Self {
+        self.forced_pressed = pressed;
+        self
+    }
+
+    pub fn forced_hover(&self) -> bool {
+        self.forced_hover
+    }
+
+    pub fn forced_focus(&self) -> bool {
+        self.forced_focus
+    }
+
+    pub fn forced_pressed(&self) -> bool {
+        self.forced_pressed
     }
 
     /// Opt this button into 3D world-space rendering. When `config` is
@@ -361,9 +398,12 @@ impl View for Button {
             s.finish()
         };
 
-        let (is_pressed, set_pressed) = cvkg_vdom::use_state(id_hash, false);
-        let (is_hovered, set_hovered) = cvkg_vdom::use_state(hover_hash, false);
-        let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
+        let (state_pressed, set_pressed) = cvkg_vdom::use_state(id_hash, false);
+        let (state_hovered, set_hovered) = cvkg_vdom::use_state(hover_hash, false);
+        let (state_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
+        let is_pressed = state_pressed || self.forced_pressed;
+        let is_hovered = state_hovered || self.forced_hover;
+        let is_focused = state_focused || self.forced_focus;
 
         let hover_anim_hash = hover_hash.wrapping_add(12345);
         let press_anim_hash = focus_hash.wrapping_add(12345);
