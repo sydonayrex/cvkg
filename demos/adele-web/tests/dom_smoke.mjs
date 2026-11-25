@@ -57,6 +57,8 @@ export async function runDomSmoke() {
   };
   check('Ctrl+K focuses search', key('k', { ctrlKey: true }).last_action === 'focus_search', state());
   check('typing inserts text', key('a').text === 'a', state());
+  const liveLabels = [...document.querySelectorAll('[data-cvkg-node-id]')].map(e => e.getAttribute('aria-label'));
+  check('VDOM tree tracks live text', liveLabels.some(label => label && label.includes('Text: a')), liveLabels);
   check('Backspace deletes', key('Backspace').text === '', state());
   check('Tab advances region', key('Tab').focused_region === 2, state());
   check('Escape clears text', key('Escape').last_action === 'clear_text', state());
@@ -72,7 +74,7 @@ export async function runDomSmoke() {
 
   return {
     pass: failures.length === 0,
-    checks: 20,
+    checks: 21,
     failures,
   };
 }

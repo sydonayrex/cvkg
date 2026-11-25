@@ -272,6 +272,7 @@ pub fn install_input_handlers(canvas_id: &str) -> Result<(), wasm_bindgen::JsVal
             });
             log::info!("[web-input] keydown key={key} action={announcement}");
             let _ = crate::announce_to_a11y(&announcement);
+            crate::sync_a11y_vdom();
             crate::schedule_render();
             if key == "Tab" || key == "Escape" {
                 return;
@@ -296,6 +297,7 @@ pub fn install_input_handlers(canvas_id: &str) -> Result<(), wasm_bindgen::JsVal
                 }
             });
             let _ = crate::announce_to_a11y(&format!("Focused {announcement}"));
+            crate::sync_a11y_vdom();
             crate::schedule_render();
         });
     canvas.add_event_listener_with_callback("pointerdown", pointer.as_ref().unchecked_ref())?;

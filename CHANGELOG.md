@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.3 - 2026-11-22
+
+Patch release. Streams input state into the mirrored web accessibility tree.
+
+- `sync_a11y_vdom` rebuilds the VDOM tree after keydown, pointer, and text-proxy
+  events, so mirrored labels and caret state stay current.
+- VDOM nodes are mirrored parent-first, which fixes nested node insertion on
+  WebKit and Chromium.
+- DOM smoke now checks live VDOM label updates (21 checks).
+
 ## v0.4.2 - 2026-11-22
 
 Patch release. Addresses the residual caveats from the cross-review rerun.

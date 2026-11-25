@@ -78,6 +78,10 @@ fn a11y_demo_vdom() -> VDom {
         }
     }
 
+    let input = crate::web_input::current_state();
+    let text_label = format!("Text: {} (caret {})", input.text, input.caret);
+    let focus_label = format!("Focused region {}", input.focused_region);
+
     let mut vdom = VDom::new();
     vdom.apply_patches(vec![
         VDomPatch::Create(node(
@@ -87,23 +91,26 @@ fn a11y_demo_vdom() -> VDom {
             None,
             vec![KvasirId(2), KvasirId(3)],
         )),
-        VDomPatch::Create(node(
-            2,
-            "Text",
-            "heading",
-            Some("ADELE design systems explorer"),
-            vec![],
-        )),
-        VDomPatch::Create(node(
-            3,
-            "Text",
-            "paragraph",
-            Some("Design systems explorer"),
-            vec![],
-        )),
+        VDomPatch::Create(node(2, "Text", "heading", Some(&text_label), vec![])),
+        VDomPatch::Create(node(3, "Text", "paragraph", Some(&focus_label), vec![])),
     ]);
     vdom
 }
+
+/// Refresh the mirrored VDOM tree from the current input state.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn sync_a11y_vdom() {
+    A11Y_SPIKE.with(|cell| {
+        if let Some(bridge) = cell.borrow_mut().as_mut() {
+            let vdom = a11y_demo_vdom();
+            let _ = bridge.mirror_vdom(&vdom);
+        }
+    });
+}
+
+/// Native stub: there is no DOM tree to refresh outside the browser.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn sync_a11y_vdom() {}
 
 /// P1-3 spike: create the DOM accessibility/text bridge for the canvas with
 /// the given element `id`, mirror two example nodes, and forward text-proxy
@@ -121,6 +128,7 @@ pub fn init_a11y_bridge_spike(canvas_id: &str) -> Result<(), JsValue> {
             crate::web_input::apply_proxy_text(&text);
             let caret = crate::web_input::current_state().caret;
             let _ = crate::announce_to_a11y(&format!("Text changed: {text} (caret {caret})"));
+            crate::sync_a11y_vdom();
             crate::schedule_render();
         } else {
             log::info!("[a11y-spike] {:?}", event);

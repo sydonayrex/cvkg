@@ -284,13 +284,28 @@ impl A11yBridge {
 
     /// Mirror every visible VDOM node into the DOM with its world geometry.
     pub fn mirror_vdom(&mut self, vdom: &cvkg_vdom::VDom) -> Result<(), JsValue> {
-        for (id, node) in &vdom.nodes {
+        let mut ids: Vec<_> = vdom.nodes.keys().copied().collect();
+        ids.sort_by_key(|id| {
+            let mut current = *id;
+            let mut depth = 0;
+            while let Some(parent) = vdom.parents.get(&current) {
+                depth += 1;
+                current = *parent;
+                if depth > 64 {
+                    break;
+                }
+            }
+            depth
+        });
+
+        for id in ids {
+            let node = &vdom.nodes[&id];
             if node.aria_props.hidden {
                 continue;
             }
-            let rect = vdom.world_rect(*id).unwrap_or(node.layout);
+            let rect = vdom.world_rect(id).unwrap_or(node.layout);
             let dom_id = 1000 + id.0;
-            let parent = vdom.parents.get(id).map(|parent| 1000 + parent.0);
+            let parent = vdom.parents.get(&id).map(|parent| 1000 + parent.0);
             let role = if node.aria_role.is_empty() {
                 "generic"
             } else {

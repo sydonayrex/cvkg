@@ -48,3 +48,9 @@ together.
 `v0.4.2` is a patch correction to `v0.4.1`. It addresses the residual
 cross-review caveats without changing public signatures. The `v0.4.1` tag is
 immutable; move all pins to `0.4.2` together.
+
+## v0.4.3
+
+`v0.4.3` is a patch correction to `v0.4.2`. It keeps all public signatures
+stable and only refreshes the web accessibility bridge. The `v0.4.2` tag is
+immutable; move all pins to `0.4.3` together.
