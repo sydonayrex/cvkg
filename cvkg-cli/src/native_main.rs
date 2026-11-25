@@ -145,6 +145,12 @@ enum Commands {
         #[arg(long)]
         features: Vec<String>,
     },
+    /// Serve MCP discovery requests over stdin
+    Mcp {
+        /// Keep the server attached to stdin until EOF
+        #[arg(long)]
+        stdio: bool,
+    },
     /// Inspect the generated component source registry
     Component {
         /// Action: list, view, diff, add, or update
@@ -586,6 +592,16 @@ pub fn run() {
                 println!("✅ Production Export Complete! Artifacts located in /dist");
             } else {
                 eprintln!("❌ Export failed. Ensure wasm-pack is installed.");
+            }
+        }
+        Commands::Mcp { stdio } => {
+            if !stdio {
+                eprintln!("Use --stdio to attach the MCP server to stdin");
+                std::process::exit(1);
+            }
+            if let Err(error) = cvkg_cli::mcp::serve_stdin() {
+                eprintln!("mcp error: {error}");
+                std::process::exit(1);
             }
         }
         Commands::Component {

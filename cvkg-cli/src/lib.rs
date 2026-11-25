@@ -8,6 +8,7 @@ pub mod dev_runtime;
 pub mod devtools;
 pub mod devtools_dashboard;
 pub mod error;
+pub mod mcp;
 pub mod native_shell;
 pub mod patch_engine;
 pub mod plugin;

@@ -135,5 +135,9 @@ workspace = true
 workspace = true
 
 [[test]]
+name = "mcp_tests"
+path = "tests/mcp_tests.rs"
+
+[[test]]
 name = "component_registry"
 path = "tests/component_registry.rs"
