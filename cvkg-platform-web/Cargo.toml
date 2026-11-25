@@ -11,4 +11,4 @@ name = "cvkg_platform_web"
 path = "src/lib.rs"
 
 [dependencies]
-cvkg-platform-core = { path = "../cvkg-platform-core", version = "0.3.5" }
+cvkg-platform-core = { path = "../cvkg-platform-core", version = "0.4.0" }

@@ -12,6 +12,7 @@ static GPU_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
 async fn test_visual_regression_basic() {
+    let _process_lock = crate::common::gpu_process_lock();
     let _gpu_lock = crate::common::gpu_lock();
     if !crate::common::gpu_available() {
         eprintln!("[gpu-guard] skipping test_visual_regression_basic: no adapter within 5s");
@@ -102,6 +103,7 @@ async fn test_visual_regression_basic() {
 
 #[tokio::test]
 async fn test_generate_niflheim_screenshot() {
+    let _process_lock = crate::common::gpu_process_lock();
     let _gpu_lock = crate::common::gpu_lock();
     if !crate::common::gpu_available() {
         eprintln!("[gpu-guard] skipping test_generate_niflheim_screenshot: no adapter within 5s");

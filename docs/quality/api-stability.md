@@ -2,7 +2,7 @@
 
 Release mechanics live in `docs/quality/release-policy.md`.
 
-Status: adopted for the 0.3.x line (2026-11-22). Applies to every crate in the workspace.
+Status: adopted for the 0.3.x line (2026-11-22). Extended to the 0.4.x line for the v0.4.0 release. Applies to every crate in the workspace.
 
 ## Version scheme
 
@@ -27,6 +27,7 @@ Status: adopted for the 0.3.x line (2026-11-22). Applies to every crate in the w
 `cvkg-macros` is part of the tier of the item it generates.
 
 ## Deprecation process
+
 
 1. Add `#[deprecated(since = "x.y.z", note = "replacement or removal plan")]` and
    keep the old behavior for at least one minor release.

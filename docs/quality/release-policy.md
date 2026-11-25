@@ -27,3 +27,11 @@ Use the same tag or commit for every CVKG dependency in one dependency graph. Mi
 2. Run `cargo check --workspace --all-targets` and `cargo test --workspace --tests --lib`.
 3. Update `CHANGELOG.md` and `docs/quality/api-stability.md` if a tier changes.
 4. Tag the reviewed commit and push the tag.
+
+## v0.4.0
+
+`v0.4.0` is a minor release. It introduces new crates and features while
+keeping the existing renderer split and the `State<T>` compatibility path.
+Consumers must move all workspace pins to `0.4.0` in the same commit. The
+release notes live in `CHANGELOG.md`; the fresh review lives in
+`plans/cross-review-2026-11-22-rerun.md`.
