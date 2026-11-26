@@ -60,3 +60,9 @@ immutable; move all pins to `0.4.3` together.
 `v0.4.4` is a patch correction to `v0.4.3`. It adds browser-runner and ignore
 changes without touching public Rust APIs. The `v0.4.3` tag is immutable; move
 all pins to `0.4.4` together.
+
+## v0.4.5
+
+`v0.4.5` is a patch correction to `v0.4.4`. It removes the WebKit/iPhone CI
+proxy without changing Rust APIs. The `v0.4.4` tag is immutable; move all pins
+to `0.4.5` together.

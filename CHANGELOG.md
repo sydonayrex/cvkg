@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.5 - 2026-11-22
+
+Patch release. Removes the WebKit/iPhone CI proxy.
+
+- `browser-matrix.yml` now runs only the Chromium smoke job.
+- Browser verification docs mark Safari/iOS as out of scope.
+- No Rust API changed.
+
 ## v0.4.4 - 2026-11-22
 
 Patch release. Adds real WebKit browser verification to the workspace.

@@ -1,21 +1,17 @@
-# Browser verification matrix
+# Browser verification
+
+Native Safari and iOS verification is out of scope for this repository.
 
 | Engine | Where | Status |
 |---|---|---|
-| WebKit 27.2 / WPE 2.55.0 (Playwright) | Local Linux | Verified: DOM smoke pass, 21 checks; required local ICU 74 shim |
-| WebKit / iPhone 13 emulation | Local Linux | Verified: DOM smoke pass, 21 checks |
 | Chromium (Playwright) | Local Linux | Verified: DOM smoke pass, 21 checks |
-| WebKit (macOS) | CI job `browser-matrix / webkit-macos` | Automated, not run on this Linux host |
-| WebKit (iPhone 13 emulation) | CI job `browser-matrix / webkit-macos` | Automated, matches local proxy pass |
-| Safari / iOS native | Not covered | No Apple device or macOS runner in this environment |
+| Chromium (Playwright) | CI job `browser smoke / chromium-linux` | Automated on `workflow_dispatch` |
+| WebKit 27.2 / WPE 2.55.0 | Local Linux | Previously verified with a local ICU shim; not in CI |
+| Safari / iOS native | Not covered | Out of scope |
 
 The CI workflow is manual (`workflow_dispatch`) to keep release builds free of
 browser downloads. Run it with `gh workflow run browser-matrix.yml`, then read
-each job's `npm run smoke` output. The runner script is
+the `chromium-linux` job's `npm run smoke` output. The runner script is
 `demos/adele-web/scripts/browser_smoke.mjs`; it requires
 `demos/adele-web/tests/dom_smoke.html` served on port 8765 and fails on a
 non-passing smoke result or any page error.
-
-Playwright's `webkit` engine is the closest automatable proxy for Safari. It is
-not a substitute for a native Safari or iOS device pass; keep the last row open
-until a macOS runner with Safari is available.

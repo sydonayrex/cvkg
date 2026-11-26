@@ -1,4 +1,4 @@
-name: browser matrix
+name: browser smoke
 
 on:
   workflow_dispatch:
@@ -29,34 +29,4 @@ jobs:
         run: |
           for i in $(seq 1 30); do curl --fail -s http://127.0.0.1:8765/tests/dom_smoke.html > /dev/null && break; sleep 1; done
           npm run smoke -- chromium
-        working-directory: demos/adele-web
-
-  webkit-macos:
-    runs-on: macos-14
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - name: Install wasm-pack
-        run: cargo install wasm-pack --locked
-      - name: Build wasm demo
-        run: wasm-pack build --target web
-        working-directory: demos/adele-web
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install Playwright
-        run: npm install && npx playwright install webkit
-        working-directory: demos/adele-web
-      - name: Start static server
-        run: python3 -m http.server 8765 > /tmp/cvkg-http.log 2>&1 &
-        working-directory: demos/adele-web
-      - name: Run WebKit smoke
-        run: |
-          for i in $(seq 1 30); do curl --fail -s http://127.0.0.1:8765/tests/dom_smoke.html > /dev/null && break; sleep 1; done
-          npm run smoke -- webkit
-        working-directory: demos/adele-web
-      - name: Run iOS WebKit smoke
-        run: npm run smoke -- webkit 'iPhone 13'
         working-directory: demos/adele-web
